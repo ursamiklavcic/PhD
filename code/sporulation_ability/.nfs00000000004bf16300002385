@@ -7,18 +7,16 @@
 #SBATCH --mem=50G
 #SBATCH --time=14-12:00:00
 
-# Species that were found by MetaPhlAn4, but we havent determined their sporulation ability yet. (They were not a part of MIDAS analysis) 
-# ~/projecst/thesis/species_to_define_GCF.csv created with ~/projecst/thesis/longitudinal_shotugn/species_define_spore_metaphlan.R
-
+# Species that were found by MetaPhlAn4. 
 
 ## Download genomes 
-# Input file with GTDB accessions in the first column
- genomes_dir="/home/nlzoh.si/ursmik1/projects/spore_evo_dynamics/data/sporulation_signature/all_gtdb_genomes/additional_mpa_genomes"
+# Input file with GTDB accessions in the third column
+genomes_dir="/home/nlzoh.si/ursmik1/projects/thesis/data/sporulation_ability/genomes"
 
 mkdir -p "$genomes_dir"
 
-# Read accession numbers from the first column 
-cut -f2 ~/projects/thesis/species_to_define_GCF.tsv | while read -r accession; do
+# Read accession numbers from the third column 
+cut -f3 /home/nlzoh.si/ursmik1/projects/thesis/data/sporulation_ability/mpa_accession_manual.tsv | while read -r accession; do
     # Clean up whitespace
     accession=$(echo "$accession" | tr -d '[:space:]')
 
@@ -59,13 +57,13 @@ conda activate blast
 
 # Set paths
 genes_dir="/home/nlzoh.si/ursmik1/projects/spore_evo_dynamics/data/sporulation_signature/gene_aa_sequences"
-genomes_dir="/home/nlzoh.si/ursmik1/projects/spore_evo_dynamics/data/sporulation_signature/all_gtdb_genomes/additional_mpa_genomes/extracted_fna/"
-output="/home/nlzoh.si/ursmik1/projects/spore_evo_dynamics/data/sporulation_signature"
+genomes_dir="/home/nlzoh.si/ursmik1/projects/thesis/data/sporulation_ability/genomes/extracted_fna"
+output="/home/nlzoh.si/ursmik1/projects/thesis/data/sporulation_ability"
 
 mkdir -p "${output}/blast_tmp"
 
 # Output file with header
-output_file="${output}/additional_mpa_blast_results.tsv"
+output_file="${output}/mpa_blast_results.tsv"
 echo -e "gene_name\tgenome_id\tevalue\tidentity" > "$output_file"
 
 # Loop over each gene FASTA file
