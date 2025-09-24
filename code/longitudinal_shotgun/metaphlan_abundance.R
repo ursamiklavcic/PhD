@@ -50,7 +50,15 @@ abund <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_tabl
          SGB = str_remove_all(SGB, 't__')) %>% 
   select(-MC013)
 
-length(unique(abund$Species))
+length(unique(filter(abund, Domain == 'Bacteria')$Species))
+
+abund_gtdb <- read.table('~/projects/longitudinal_shotgun/data/gtdb_merged.txt', sep = '\t', header = TRUE) %>% 
+  pivot_longer(-clade_name) %>% 
+  filter(grepl('s__', clade_name)) %>% 
+  separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species'),
+           sep=";")
+
+length(unique(filter(abund_gtdb, Domain == 'd__Bacteria')$Species))
 
 # At kingdom level
 domain <- filter(abund, is.na(Phylum)) %>% 
@@ -226,48 +234,48 @@ bacteria %>%
 ggsave('longitudinal_shotgun/plots/mpa_rel_abund_bact_etoh.png')
 
 # Sporulation ability 
-spores <- read.table('longitudinal_shotgun/data/sporulation_ability2021.tsv', sep = '\t', header = TRUE)
-
-# GTDB 
-# joining by whole taxonomical name is inefficient, so I will do it by hand, 
-# to be able to compare metaphlan results with sporulation ability and later PStrain with sporulation ability 
-n <- read.table('~/projects/longitudinal_shotgun/data/gtdb_merged.txt', sep = '\t', header = TRUE) %>% 
-  pivot_longer(-clade_name) %>% 
-  filter(grepl('s__', clade_name)) %>% 
-  left_join(g2, by = join_by('clade_name' == 'tax')) %>% 
-  select(clade_name, genome_id) %>% unique()
-
-write_tsv(n, 'longitudinal_shotgun/data/metaphlan_gtdb_species_pre.tsv')
-
-# Import metaphlan_gtdb_species.tsv (which was manually curated) 
-
-read.table('longitudinal_shotgun/data/metaphlan_gtdb_species.tsv') %>% 
-  left_join(spores, by = join_by('clade_name' == 'tax'), relationship = "many-to-many") %>% 
-  separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species'), sep=";") %>% 
-  mutate(PA = ifelse(value > 0, 1, 0), 
-         name = str_remove_all(name, 'gtdbdd_'), 
-         name = str_remove_all(name, '.txt'),
-         Domain = str_remove_all(Domain, 'd__'), 
-         Phylum = str_remove_all(Phylum, 'p__'), 
-         Class = str_remove_all(Class, 'c__'), 
-         Order = str_remove_all(Order, 'o__'), 
-         Family = str_remove_all(Family, 'f__'), 
-         Genus = str_remove_all(Genus, 'g__'), 
-         Species = str_remove_all(Species, 's__') 
-         # Phylum = str_replace_all(Phylum, 'Firmicutes', 'Bacillota'), 
-         # Phylum = str_replace_all(Phylum, ' Bacillota', 'Bacillota'),
-         # Phylum = str_remove_all(Phylum, '_[a-zA-Z]'),
-         # Phylum = str_remove_all(Phylum, ' '), 
-         # Phylum = str_replace_all(Phylum, 'Actinobacteriota', 'Actinomycetota'),
-         # Phylum = str_replace_all(Phylum, 'Cyanobacteria', 'Cyanobacteriota'), 
-         # Phylum = str_replace_all(Phylum, 'Desulfobacterota_I', 'Desulfobacterota'), 
-         # Phylum = str_replace_all(Phylum, 'Proteobacteria', 'Pseudomonadota'), 
-         # Phylum = if_else(is.na(Phylum), 'unclassified Bacteria', Phylum)
-         ) %>% 
-  filter(Domain == 'Bacteria', !is.na(Species)) %>% 
-  left_join(metadata, by = join_by('name' == 'Group'), relationship = "many-to-many") 
-
-abund_gtdb %>% 
-  group_by(sporulation_ability) %>% 
-  reframe(n = n_distinct(Species))
-
+# spores <- read.table('longitudinal_shotgun/data/sporulation_ability2021.tsv', sep = '\t', header = TRUE)
+# 
+# # GTDB 
+# # joining by whole taxonomical name is inefficient, so I will do it by hand, 
+# # to be able to compare metaphlan results with sporulation ability and later PStrain with sporulation ability 
+# n <- read.table('~/projects/longitudinal_shotgun/data/gtdb_merged.txt', sep = '\t', header = TRUE) %>% 
+#   pivot_longer(-clade_name) %>% 
+#   filter(grepl('s__', clade_name)) %>% 
+#   left_join(g2, by = join_by('clade_name' == 'tax')) %>% 
+#   select(clade_name, genome_id) %>% unique()
+# 
+# write_tsv(n, 'longitudinal_shotgun/data/metaphlan_gtdb_species_pre.tsv')
+# 
+# # Import metaphlan_gtdb_species.tsv (which was manually curated) 
+# 
+# read.table('longitudinal_shotgun/data/metaphlan_gtdb_species.tsv') %>% 
+#   left_join(spores, by = join_by('clade_name' == 'tax'), relationship = "many-to-many") %>% 
+#   separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species'), sep=";") %>% 
+#   mutate(PA = ifelse(value > 0, 1, 0), 
+#          name = str_remove_all(name, 'gtdbdd_'), 
+#          name = str_remove_all(name, '.txt'),
+#          Domain = str_remove_all(Domain, 'd__'), 
+#          Phylum = str_remove_all(Phylum, 'p__'), 
+#          Class = str_remove_all(Class, 'c__'), 
+#          Order = str_remove_all(Order, 'o__'), 
+#          Family = str_remove_all(Family, 'f__'), 
+#          Genus = str_remove_all(Genus, 'g__'), 
+#          Species = str_remove_all(Species, 's__') 
+#          # Phylum = str_replace_all(Phylum, 'Firmicutes', 'Bacillota'), 
+#          # Phylum = str_replace_all(Phylum, ' Bacillota', 'Bacillota'),
+#          # Phylum = str_remove_all(Phylum, '_[a-zA-Z]'),
+#          # Phylum = str_remove_all(Phylum, ' '), 
+#          # Phylum = str_replace_all(Phylum, 'Actinobacteriota', 'Actinomycetota'),
+#          # Phylum = str_replace_all(Phylum, 'Cyanobacteria', 'Cyanobacteriota'), 
+#          # Phylum = str_replace_all(Phylum, 'Desulfobacterota_I', 'Desulfobacterota'), 
+#          # Phylum = str_replace_all(Phylum, 'Proteobacteria', 'Pseudomonadota'), 
+#          # Phylum = if_else(is.na(Phylum), 'unclassified Bacteria', Phylum)
+#          ) %>% 
+#   filter(Domain == 'Bacteria', !is.na(Species)) %>% 
+#   left_join(metadata, by = join_by('name' == 'Group'), relationship = "many-to-many") 
+# 
+# abund_gtdb %>% 
+#   group_by(sporulation_ability) %>% 
+#   reframe(n = n_distinct(Species))
+# 
