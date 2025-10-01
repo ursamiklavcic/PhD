@@ -243,6 +243,11 @@ bacteria %>%
   labs(x = 'Day', y = 'Relative abundance [%]')
 ggsave('longitudinal_shotgun/plots/mpa_rel_abund_bact_etoh.png')
 
+
+# Beta diveristy 
+
+
+
 # Sporulation ability 
 # Before this part run analysis in the folder code/sporulation_ability
 sporulation_ability <- read.table('data/sporulation_ability/sporulation_ability2021.tsv', sep = '\t', header = TRUE) %>% 
