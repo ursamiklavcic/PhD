@@ -1,7 +1,73 @@
 # PStrain with sporulation ability 
 
+col <- c('#3CB371', '#f0a336')
+col2 <- c('#A7E2C1', '#F7CD92')
+colm <- '#3CB371'
+cole <- '#f0a336'
+
+# First run code/sporulation_ability/retrive_PStrain_data.sh than this code 
+
+strains <- read.table('data/PStrain/PStrain_all.tsv', sep = '\t', header = TRUE) %>% 
+  filter(Species != '# Species', Strain != 'Consensus_Seq', Strain != 'No_Valid_SNV') %>% 
+  mutate(Species = str_remove_all(Species, '[s]__'))
+
+metadata <- read.table('~/projects/longitudinal_shotgun/data/metadata.csv', sep = ';', header = TRUE)
+sporulation_ability <- read.table('data/sporulation_ability/sporulation_ability2021.tsv', sep = '\t', header = TRUE)
+
+abund <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', comment = '#') %>%
+  rename_with(~ str_remove(., '^profiled_'), starts_with('profiled_')) %>%
+  filter(grepl('s__', clade_name), !grepl('t__', clade_name)) %>% 
+  left_join(select(sporulation_ability, n_genes, PA, sporulation_ability, clade_name), by = 'clade_name') %>% 
+  pivot_longer(-c(clade_name, PA, n_genes, sporulation_ability)) %>% 
+  #mutate(clade_name = str_remove_all(clade_name, '[a-zA-Z]__')) %>%
+  separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species'),
+           sep="\\|") %>% 
+  mutate(Phylum = ifelse(Phylum == 'p__Firmicutes', 'p__Bacillota', Phylum), 
+         Domain = str_remove_all(Domain, 'k__'), 
+         Phylum = str_remove_all(Phylum, 'p__'), 
+         Class = str_remove_all(Class, 'c__'), 
+         Order = str_remove_all(Order, 'o__'), 
+         Family = str_remove_all(Family, 'f__'), 
+         Genus = str_remove_all(Genus, 'g__'), 
+         Species = str_remove_all(Species, 's__'), 
+         sample = name) 
+#   %>% 
+#   filter(name != 'MC013') %>% 
+#   left_join(metadata, by = join_by('name' == 'Group'))
+
+length(unique(strains$Species))
+
+strain <- left_join(strains, abund, by = c('Species', 'sample')) %>% 
+  filter(!is.na(Phylum), !is.na(sporulation_ability))
+
+length(unique(strain$Species))
+
+strain %>% 
+  group_by(Phylum, Species, sporulation_ability) %>%  
+  reframe(n_strains = n_distinct(Strain)) %>% 
+  ggplot(aes(x = n_strains, y = Phylum, fill = sporulation_ability, color = sporulation_ability)) +
+  geom_violin() +
+  geom_point(size = 2) +
+  scale_fill_manual(values = col2) +
+  scale_color_manual(values = col2) +
+  labs(x = '# strains', y = '', fill = '', color = '') +
+  theme(legend.position = 'bottom')
+ggsave('out/sporulation/SNS_n_strains_phylum.png')
 
 
+bacillota_strain <- filter(strain, Phylum == 'Bacillota')
+
+bacillota_strain %>% 
+  group_by(Genus, Family, Species, sporulation_ability) %>%  
+  reframe(n_strains = n_distinct(Strain)) %>% 
+  ggplot(aes(x = n_strains, color = sporulation_ability)) +
+  geom_density() +
+  facet_wrap(~Family) +
+  scale_fill_manual(values = col2) +
+  scale_color_manual(values = col) +
+  labs(x = '# strains', y = '', fill = '', color = '') +
+  theme(legend.position = 'bottom')
+ggsave('out/sporulation/SNS_n_strains_phylum.png')
 
 
 
