@@ -30,7 +30,8 @@ gene_info <- read.table('data/sporulation_ability/gene_info.csv', sep = ';', hea
 # Import results from 02_find_genomes_from_species.sh
 genome_info <- read.table('data/sporulation_ability/mpa_accession_manual.tsv', sep = '\t', header = TRUE)
 
-metadata <- read.table('../longitudinal_shotgun/data/metadata.csv', sep = ';', header = TRUE)
+metadata <- read.table('../longitudinal_shotgun/data/metadata.csv', sep = ';', header = TRUE) %>%  
+  mutate(date = dmy(date))
 
 
 abund <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', comment = '#') %>%
@@ -276,8 +277,20 @@ abund3 %>%
   scale_x_log10() +
   scale_fill_manual(values = col2) +
   labs(x = 'Relative abundance [log10]', y = '', fill = '') +
-  theme(legend.position = 'bottom')
+  theme(legend.position = 'bottom') +
+  stat_compare_means()
 ggsave('out/sporulation/SNS_rel_abund.png')
+
+# Is distribution of relative abundances for Bacillota the same for non-spore and spore-forming? 
+bacillota <- filter(abund3, Phylum == 'Bacillota')
+  
+wilcox.test(filter(bacillota, sporulation_ability == 'Spore-former')$value, filter(bacillota, sporulation_ability == 'Non-spore-former')$value, alternative = 'greater')
+
+# Wilcoxon rank sum test with continuity correction
+# 
+# data:  filter(rel_bacillota, sporulation_ability == "Spore-former")$value and filter(rel_bacillota, sporulation_ability == "Non-spore-former")$value
+# W = 257906560, p-value < 2.2e-16
+# alternative hypothesis: true location shift is greater than 0
 
 # Number of species 
 abund3 %>% 
@@ -295,13 +308,13 @@ abund3 %>%
 ggsave('out/sporulation/SNS_N_species.png')
 
 # density rel abund 
-abund3 %>% 
+bacillota %>% 
   ggplot(aes(x = value, color = sporulation_ability)) +
   geom_density(linewidth = 2) +
   scale_x_log10() +
   scale_color_manual(values = col2) +
   labs(x = 'Relative abundance [log10]', y = 'Density', color = '')
-ggsave('out/sporulation/SNS_density_relabund.png')
+ggsave('out/sporulation/SNS_density_relabund_bacillota.png')
 
 
 # Prevalence 
@@ -372,5 +385,144 @@ preval3 %>%
   labs(x = '', y = 'Prevalence [days present within person]') + theme(legend.position = 'none')
 ggsave('out/sporulation/SNS_boxplot_prevalence.png')
 
+# Alpha diveristy 
+bacillota <- mutate(bacillota, name = paste0(ifelse(sporulation_ability == 'Spore-former', 'S_', 'NS_'),name))
 
+# Alpha diversity 
+library(vegan)
+n <- filter(bacillota, value > 0) %>% 
+  group_by(name) %>% 
+  reframe(richness = n_distinct(Species)) 
+
+tab <- bacillota %>% 
+  select(Species, name, value) %>%
+  pivot_wider(names_from = 'name', values_from = 'value', values_fill = 0) %>% 
+  column_to_rownames('Species') %>% 
+  t()
+shannon = diversity(tab, index = 'shannon')
+
+alpha <- left_join(n, as_tibble(as.list(shannon)) %>% 
+                     pivot_longer(names_to = 'name', values_to = 'shannon', cols = starts_with(c('NS', 'S'))), 
+                   by = 'name') %>%
+  left_join(bacillota, by = 'name') %>% 
+  mutate(person2 = person) 
+
+event_data <- read.table('data/extreme_event_data.csv', sep = ',', header = TRUE)
+
+# richness
+ggplot(alpha, aes(x=day, y=richness)) +
+  geom_rect(data = event_data, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = extremevent_type), inherit.aes = FALSE,
+            alpha = 0.6) +
+  scale_fill_manual(values = c('white','#d94343', '#d98e43', '#f1f011', '#0c9910', '#3472b7', '#7934b7', '#b73485', '#0f5618')) +
+  geom_line(data = dplyr::select(alpha, -person) %>% filter(sporulation_ability == 'Non-spore-former'), 
+            aes(group=person2), color= colm, linewidth=0.5, alpha=0.5) +
+  geom_line(data=alpha %>% dplyr::select(-person) %>% filter(sporulation_ability == 'Spore-former'), 
+            aes(group=person2), color= cole, linewidth=0.5, alpha=0.5) +
+  geom_line(data=alpha %>% filter(sporulation_ability == 'Non-spore-former'),
+            aes(color=person), color= colm, linewidth=1.2) +
+  geom_line(data=alpha %>% filter(sporulation_ability == 'Spore-former'), 
+            color=cole, linewidth=1.2) +
+  facet_wrap(~person, scales = 'free') +
+  labs(x='Day', y= 'Richness', fill = 'Event')
+ggsave('out/sporulation/SNS_richness.png')
+
+ggplot(alpha, aes(x=day, y=shannon)) +
+  geom_rect(data = event_data, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = extremevent_type), inherit.aes = FALSE,
+            alpha = 0.6) +
+  scale_fill_manual(values = c('white','#d94343', '#d98e43', '#f1f011', '#0c9910', '#3472b7', '#7934b7', '#b73485', '#0f5618')) +
+  geom_line(data = dplyr::select(alpha, -person) %>% filter(sporulation_ability == 'Non-spore-former'), 
+            aes(group=person2), color= colm, linewidth=0.5, alpha=0.5) +
+  geom_line(data=alpha %>% dplyr::select(-person) %>% filter(sporulation_ability == 'Spore-former'), 
+            aes(group=person2), color= cole, linewidth=0.5, alpha=0.5) +
+  geom_line(data=alpha %>% filter(sporulation_ability == 'Non-spore-former'),
+            aes(color=person), color= colm, linewidth=1.2) +
+  geom_line(data=alpha %>% filter(sporulation_ability == 'Spore-former'), 
+            color=cole, linewidth=1.2) +
+  facet_wrap(~person, scales = 'free') +
+  labs(x='Day', y= 'Shannon', fill = 'Event')
+ggsave('out/sporulation/SNS_shannon.png')
+
+# Beta diversity & density of clustering
+
+dist <- vegdist(tab, method = 'bray')
+mds <- metaMDS(dist)
+
+mds_data <- as.data.frame(mds$points) %>%  
+  rownames_to_column('name') %>% 
+  mutate(name_old = str_remove_all(name, 'S_'), 
+         name_old = str_remove_all(name_old, 'N')) %>% 
+  left_join(metadata, by = join_by('name_old' == 'Group')) %>% 
+  mutate(spore_ability = substr(name, 1, 2))
+
+
+ggplot(mds_data, aes(x = MDS1, y = MDS2, color = person, shape = biota)) +
+  geom_point()
+
+# 
+dist_bray <- as.matrix(dist) %>%
+  as_tibble(rownames = 'Group') %>%
+  pivot_longer(-Group) %>%
+  filter(Group != name) %>%  
+  mutate(sample_pairs = paste(Group, name)) %>%
+  group_by(sample_pairs) %>%
+  reframe(mean_value = mean(value, na.rm = TRUE), 
+            median_value = median(value, na.rm = TRUE)) 
+
+# Tidy the Bray data and join with metadata
+bray <- dist_bray %>%
+  separate(sample_pairs, into = c("Group", "name"), sep = " ") %>%
+  mutate(Group_clean = str_remove(Group, "^(NS_|S_)"),
+         name_clean = str_remove(name, "^(NS_|S_)"), 
+         spore_ability.x = substr(Group, 1, 2), 
+         spore_ability.y = substr(name, 1, 2)) %>%
+  left_join(metadata %>% select(Group, person, date), by = join_by('Group_clean' == 'Group')) %>%
+  left_join(metadata %>% select(Group, person, date), by = join_by('name_clean' == 'Group')) %>%
+  mutate(same_person = ifelse(person.x == person.y, 'Within individual', 'Between individuals'),
+         same_fraction = ifelse(spore_ability.x == spore_ability.y, 'Yes', 'No')) %>%
+  filter(same_fraction == 'Yes')
+
+bray %>%
+  mutate(spore_ability.x = ifelse(spore_ability.x == 'S_', 'Spore-forming', 'Non-spore-forming')) %>% 
+  ggplot(aes(x=spore_ability.x, y=median_value, fill=spore_ability.y)) +
+  geom_boxplot() +
+  stat_compare_means() +
+  scale_fill_manual(values = col2) +
+  facet_wrap(~same_person) +
+  labs(x = 'Community', y = 'Median Bray-Curtis dissimilarity') +
+  theme(legend.position = 'none')
+ggsave('out/sporulation/SNS_bray_curtis_boxplot.png')
+
+# in time 
+time_bray <-  as.matrix(dist) %>%
+  as_tibble(rownames = 'Group') %>%
+  pivot_longer(-Group) %>%
+  filter(Group != name) %>%  
+  mutate(Group_clean = str_remove(Group, "^(NS_|S_)"),
+         name_clean = str_remove(name, "^(NS_|S_)"), 
+         spore_ability.x = substr(Group, 1, 2), 
+         spore_ability.y = substr(name, 1, 2)) %>% 
+  left_join(metadata %>% select(Group, person, date), by = join_by('Group_clean' == 'Group')) %>%
+  left_join(metadata %>% select(Group, person, date), by = join_by('name_clean' == 'Group')) %>%
+  mutate(same_person = ifelse(person.x == person.y, 'Within individual', 'Between individuals'),
+         same_fraction = ifelse(spore_ability.x == spore_ability.y, 'Yes', 'No'),
+         spore_ability.x = ifelse(spore_ability.x == 'S_', 'Spore-forming', 'Non-spore-forming')) %>%
+  filter(same_fraction == 'Yes') %>%  
+  # Filter different individuals
+  filter(same_person == 'Within individual') %>%
+  # Calculate the difference between sampling times
+  mutate(diff=abs(date.x-date.y)) %>%
+  # group by difference between days and person
+  group_by(spore_ability.x, person.x, diff) %>%
+  reframe(median=median(value)) 
+
+time_bray %>%
+  ggplot(aes(x=diff, y=median, color=spore_ability.x)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  stat_cor(method = 'pearson', aes(label = paste(..rr.label.., ..p.label.., sep = "~`,`~")), size = 4) +
+  labs(x='Days between sampling', y='Median Bray-Curtis distance', color='') +
+  theme(legend.position = 'bottom') +
+  guides(fill = guide_legend(ncol = 2)) +
+  scale_color_manual(values = col2) 
+ggsave('out/sporulation/SNS_time_braycurtis.png')
 
