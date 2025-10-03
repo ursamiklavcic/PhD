@@ -541,12 +541,14 @@ otu_ema2$treatmentEMA <- factor(otu_ema2$treatmentEMA,
                                             '10 min', '15 min'))
 
 otu_ema2 %>% 
+  mutate(shock = ifelse(shock == 'Ethanol_shock', 'Ethanol shock (70%)', 
+                        ifelse(shock == 'Heat_shock', 'Heat shock (30 min)', 'Non-treated stool'))) %>% 
   filter(Phylum != 'Other') %>% 
   ggplot(aes(x = treatmentEMA, y = rel_abund, fill = shock)) +
   geom_boxplot() +
   scale_y_log10() +
   facet_wrap(~ Phylum, scales = 'free_y', ncol = 3) +
-  labs(y = 'Relative abundance [log10]', x = '', fill = '') +
+  labs(y = 'Relative abundance [log10]', x = '', fill = '', color = '') +
   theme(legend.position = 'bottom')
 ggsave('out/etoh_h_comparison/rel_abundEMA.png')
 
