@@ -11,12 +11,13 @@ library(readr)
 library(ggplot2)
 library(scales)
 library(glue)
+library(ggpubr)
 
 set.seed(96)
 theme_set(theme_bw(base_size = 12))
 
 # Exploration
-shared = read.table('etoh_t_comparison/data/mothur/stability.trim.contigs.good.unique.good.filter.unique.precluster.denovo.vsearch.pick.opti_mcc.shared', 
+shared = read.table('data/etoh_h_comparison/mothur/stability.trim.contigs.good.unique.good.filter.unique.precluster.denovo.vsearch.pick.opti_mcc.shared', 
                     sep = '\t', header = TRUE) %>%
   select(Group, starts_with('Otu')) %>%
   pivot_longer(-Group)
@@ -30,7 +31,7 @@ shared %>%
   scale_x_continuous(breaks = seq(0, 80000, by=10000)) +
   #scale_y_continuous(breaks = seq(0,40, by=5)) +
   labs(x = 'Reads per sample', y = 'Number of samples')
-ggsave('etoh_t_comparison/plots/reads_per_sample.png', dpi=600)
+ggsave('out/etoh_h_comparison/reads_per_sample.png', dpi=600)
 
 # How min/max/mean/sum reads per sample/all samples
 info1 = shared %>%
@@ -49,7 +50,7 @@ shared %>%
   ggplot(aes(x=OTUabundance)) +
   geom_histogram(breaks=seq(0, 75, by =1)) +
   labs(x = 'Abundance of OTU', y= 'Number of OTUs')
-ggsave('etoh_t_comparison/plots/reads_per_OTU.png', dpi=600)
+ggsave('out/etoh_h_comparison/reads_per_OTU.png', dpi=600)
 
 # How min/max/mean reads per OTU
 info2 = shared %>%
@@ -109,7 +110,7 @@ saveRDS(otutab, 'etoh_t_comparison/data/r_data/otutab.RDS')
 otu_names = as.data.frame(otutab) %>% colnames() 
 
 # Import taxonomy table
-taxtab = read_tsv('etoh_t_comparison/data/mothur/stability.trim.contigs.good.unique.good.filter.unique.precluster.denovo.vsearch.pick.opti_mcc.0.03.cons.taxonomy') %>%
+taxtab = read_tsv('data/etoh_h_comparison/mothur/stability.trim.contigs.good.unique.good.filter.unique.precluster.denovo.vsearch.pick.opti_mcc.0.03.cons.taxonomy') %>%
   filter(OTU %in% otu_names) %>%
   select(name = "OTU", taxonomy = "Taxonomy") %>%
   mutate(taxonomy = str_replace_all(taxonomy, "\\\\|\\\"|\\(\\d+\\)", ""),
@@ -154,7 +155,9 @@ col_phylum = c('#1F77B4', '#FF7F0E',  '#2CA02C',  '#D62728', '#9467BD', '#8C564B
 col_shock = c('#a569bd', '#27ae60', '#28a9d8')
 
 ################# DNA CONCENTRATIONS ########################
-conc = metadata %>% 
+metadata <- read_csv('data/etoh_h_comparison/metadata.csv')
+
+conc <- metadata %>% 
   group_by(treatment) %>%
   mutate(meanConc = mean(DNAconcentration)) 
 
@@ -167,11 +170,11 @@ conc %>% ggplot(aes(x=DNAconcentration, y=treatment, fill = treatment)) +
   ylab('Treatment') +
   xlab('DNA concentration (ng/μl)') +
   theme(legend.position="none")
-ggsave('etoh_t_comparison/plots/DNA_concentration_treatment.png', dpi=600)
+ggsave('out/etoh_h_comparison/DNA_concentration_treatment.png', dpi=600)
 
 
 # CFU counts 
-cfu <- as_tibble(read.csv('etoh_t_comparison/data/CFU.csv', sep=',')) %>%
+cfu <- as_tibble(read.csv('data/etoh_h_comparison/CFU.csv', sep=',')) %>%
   mutate(bile_acids = ifelse(bile_acids == 'yes', 'With bile acids', 'Without bile acids'), 
          cultivation_media = ifelse(cultivation_media == 'liquid', 'Liquid media', 'Solid media'), 
          treatment = ifelse(treatment == 'cult_70', 'Ethanol shock (70%)', 
@@ -181,14 +184,14 @@ cfu <- as_tibble(read.csv('etoh_t_comparison/data/CFU.csv', sep=',')) %>%
 cfu %>%
   group_by(shock, treatment, cultivation_day, cultivation_media, bile_acids) %>%
   reframe(mean_CFU = mean(CFU, na.rm = TRUE)) %>%
-  ungroup() %>%  
+  mutate(cultivation_media = ifelse(cultivation_media == 'Liquid media', 'Enrichment before plating', 'Only plating')) %>%  
   ggplot(aes(x = cultivation_day, y=mean_CFU, color=treatment)) +
   geom_point(size = 3, position = position_dodge(width=0.2)) +
-  geom_line(aes(linetype = bile_acids), linewidth = 2, position = position_dodge(width=0.2)) +
+  geom_line(aes(linetype = bile_acids), linewidth = 1, position = position_dodge(width=0.2)) +
   facet_grid(~cultivation_media) +
   labs(x = 'Cultivation day', y = 'CFU', color = 'Treatment', linetype = '') +
   theme(legend.position = 'right')
-ggsave("etoh_t_comparison/plots/CFU.png", dpi=600)
+ggsave("out/etoh_h_comparison/CFU.png", dpi=600)
 
 # Prepare long format of OTUtable 
 otu_long <- as.data.frame(otutab) %>%
@@ -227,21 +230,24 @@ filter(otu_cultivation, #treatment == c('cult_100', 'cult_70'),
   #scale_y_log10() +
   facet_grid(Phylum ~ cultivation_media, scales = 'free', space = 'free_x') +
   labs(x = 'Cultivation day', y = '# OTUs', shape = '', color = '')
-ggsave('etoh_t_comparison/plots/number_otus_treatment.png')
+ggsave('out/etoh_h_comparison/number_otus_treatment.png')
 
+# Same as above but plot ratio
 cultivationPA <- filter(otu_cultivation, value > 0, Phylum != 'Other') %>%  
   group_by(treatment, cultivation_media, bile_acids, cultivation_day, Phylum) %>% 
   reframe(sumPA = sum(PA))   
 
 left_join(filter(cultivationPA, cultivation_media != 'Stool sample'), 
           filter(cultivationPA, cultivation_media == 'Stool sample'), by = 'Phylum') %>% 
-  mutate(ratio_OTUs = sumPA.x/sumPA.y) %>%  
+  mutate(cultivation_media.x = ifelse(cultivation_media.x == 'Liquid media', 'Enrichment before plating', 'Only plating'),
+         ratio_OTUs = sumPA.x/sumPA.y) %>%  
   ggplot(aes(x = as.factor(cultivation_day.x), y = ratio_OTUs, color = treatment.x, shape = bile_acids.x)) +
   geom_jitter(size = 4, width = 0.3) +
-  #scale_y_log10() +
-  facet_grid(Phylum ~ cultivation_media.x, scales = 'free', space = 'free_x') +
-  labs(x = 'Cultivation day', y = 'Ratio OTUs in stool sample to OTUs after treatment and culture', shape = '', color = '')
-ggsave('etoh_t_comparison/plots/ratio_otus.png')
+  scale_y_continuous(breaks = c(0, 0.5, 1), limits = c(0, 1)) +
+  facet_grid(Phylum ~ cultivation_media.x, space = 'free') +
+  labs(x = 'Cultivation day', y = expression(paste(frac('#OTUs [treatment & culture]', '# OTUs [stool sample]'))), shape = '', color = '') +
+  theme(legend.position = 'bottom')
+ggsave('out/etoh_h_comparison/ratio_otus.png')
 
 filter(otu_cultivation, #treatment == c('cult_100', 'cult_70'), 
        value > 0, Phylum != 'Other') %>%
@@ -252,8 +258,9 @@ filter(otu_cultivation, #treatment == c('cult_100', 'cult_70'),
   scale_y_log10() +
   #scale_x_continuous(breaks = c(1, 2, 5, 7,14)) +
   facet_grid(Phylum~ cultivation_media + bile_acids , scales = 'free_x', space = 'free_x') +
-  labs(x = 'Cultivation day', y = 'Relative abundance', shape = '', fill = '')
-ggsave('etoh_t_comparison/plots/relabund_otus_treatment.png')
+  labs(x = 'Cultivation day', y = 'Relative abundance', shape = '', fill = '') +
+  theme(legend.position = 'bottom')
+ggsave('out/etoh_h_comparison/relabund_otus_treatment.png')
 
 # Only Bacillota 
 filter(otu_cultivation, Phylum == 'Bacillota', value > 0) %>% 
@@ -307,7 +314,7 @@ otu_cultivation %>%
   geom_point(size = 3) +
   geom_line(mapping = aes(linetype = cultivation_media)) +
   facet_grid(treatment ~ bile_acids * cultivation_media)
-ggsave('etoh_t_comparison/plots/abundance_phylum_time.png', dpi = 600)
+ggsave('out/etoh_h_comparison/abundance_phylum_time.png', dpi = 600)
 
 # 
 otu_cultivation %>%
@@ -320,7 +327,7 @@ otu_cultivation %>%
   facet_grid(~ cultivation_media) +
   labs(x = 'Cultivation day', y = 'Relative abundance', color = 'Treatment', shape = 'Bile acids', linetype = 'Bile acids', 
        subtitle = 'Bacillota')
-ggsave('etoh_t_comparison/plots/bacillota_cultivation.png', dpi=600)
+ggsave('out/etoh_h_comparison/bacillota_cultivation.png', dpi=600)
 
 # 
 # #################### HEATMAP with DENDROGRAM ##################
@@ -338,7 +345,7 @@ ggsave('etoh_t_comparison/plots/bacillota_cultivation.png', dpi=600)
 #                             'Ethanol shock + EMA 10 min', 'Heat shock + EMA 10 min', 'Ethanol shock + EMA 15 min', 'Heat shock + EMA 15 min', 'Ethanol shock + EMA 5 min',
 #                             'Heat shock + EMA 5 min', 'Microbiota', 'Ethanol shock + wash',  'Heat shock + wash')) 
 # 
-# ggsave('etoh_t_comparison/plots/treatment_phylum.png',dpi= 600)
+# ggsave('out/etoh_h_comparison/treatment_phylum.png',dpi= 600)
 
 
 # Alpha diversity 
@@ -376,7 +383,7 @@ obs <- alpha_meta %>%
 
 ggarrange(even + labs(tag = 'A'), obs + labs(tag = 'B'), 
           common.legend = TRUE, legend = 'bottom')
-ggsave('etoh_t_comparison/plots/alpha_cultivation.png', dpi=600)
+ggsave('out/etoh_h_comparison/alpha_cultivation.png', dpi=600)
 
 
 # Beta diversity 
@@ -426,7 +433,7 @@ ord_day <-  ord_cultivation %>%
   labs(x = '', y='', color = 'Cultivation day', tag = 'E')
 
 ggarrange(ord_person, ord_tretament, ord_media, ord_bile, ord_day, common.legend = FALSE)
-ggsave('etoh_t_comparison/plots/beta_cultivation.png', dpi=600)
+ggsave('out/etoh_h_comparison/beta_cultivation.png', dpi=600)
 
 # # PCA plot
 # otu_long  <- pivot_longer(as.data.frame(otutab) %>%  
@@ -464,13 +471,13 @@ alpha_cfu %>%
                                                    'p =', scientific(h_cor$p.value, digits =1))) +
   labs(x = 'CFU/ml', y='#OTUs', color = '') +
   geom_smooth(method = 'lm')
-ggsave('etoh_t_comparison/plots/corr_observed_CFU_smooth.png', dpi=600) 
+ggsave('out/etoh_h_comparison/corr_observed_CFU_smooth.png', dpi=600) 
 
 
 
 ############ EMA treatment ############# 
 # For EMA treatments sepaeratly 
-conc_ema = metadata %>% 
+conc_ema <- metadata %>% 
   filter(cultivation == 'no') %>%
   filter(!(Group %in% c('UM', 'TZ'))) %>%
   group_by(treatment) %>%
@@ -487,8 +494,7 @@ conc_ema %>% ggplot(aes(x=DNAconcentration, y=treatment, fill = treatment, color
                             'Ethanol shock + wash', 'Ethanol shock + EMA 5 min','Ethanol shock + EMA 10 min', 'Ethanol shock + EMA 15 min')) +
   labs(x= 'DNA concentration (ng/μl)', y='') +
   theme(legend.position="none")
-ggsave('etoh_t_comparison/plots/DNAconcentration_ema.png', dpi=600)
-
+ggsave('out/etoh_h_comparison/DNAconcentration_ema.png', dpi=600)
 
 metadata %>% 
   filter(cultivation == 'no') %>%
@@ -512,7 +518,7 @@ otu_ema_rel <- filter(otu_ema, shock == 'Non-treated') %>%
 
 otu_ema_rel %>%
   filter(rel_abund.x != 0 & rel_abund.y != 0) %>%
-  mutate(ratio = rel_abund.x/rel_abund.y) %>%
+  mutate(ratio = rel_abund.y/rel_abund.x) %>%
   group_by(Phylum, shock, treatmentEMA) %>%
   reframe(mean_ratio = mean(ratio)) %>%
   ggplot(aes(x = mean_ratio, y = Phylum, color = as.factor(treatmentEMA))) +
@@ -521,9 +527,8 @@ otu_ema_rel %>%
   geom_jitter(size = 4, width = .2) +
   geom_vline(xintercept = 1) +
   facet_grid(~ shock) +
-  labs(x = 'Ratio of relative abundance in stool sample & treated sample', y = '', color = 'Illumination time \n for EMA treatment')
-ggsave('etoh_t_comparison/plots/efficiency_EMA_treatment_class.png', dpi=600)
-
+  labs(x = expression(frac('Relative abundance [treated]', 'Relative abundance [stool]')), y = '', color = 'Illumination time \n for EMA treatment')
+ggsave('out/etoh_h_comparison/efficiency_EMA_treatment_class.png', dpi=600)
 
 otu_ema2 <- otu_ema %>% 
   mutate(treatmentEMA = case_when(treatmentEMA == '5' ~'5 min', 
@@ -541,8 +546,9 @@ otu_ema2 %>%
   geom_boxplot() +
   scale_y_log10() +
   facet_wrap(~ Phylum, scales = 'free_y', ncol = 3) +
-  labs(y = 'Relative abundance [log10]', y = '', fill = '')
-ggsave('etoh_t_comparison/plots/rel_abundEMA.png')
+  labs(y = 'Relative abundance [log10]', x = '', fill = '') +
+  theme(legend.position = 'bottom')
+ggsave('out/etoh_h_comparison/rel_abundEMA.png')
 
 # Beta diversity (to check how is the reproducibility of treatment)
 ema_bray <- filter(nmds_positions, !is.na(treatmentEMA))
@@ -552,7 +558,7 @@ ema_bray %>%
   geom_point(size=4) +
   #scale_color_manual(values = c('darkred', 'skyblue', 'gold3')) +
   labs(x = '', y='', color = 'Time of light \n incubation with EMA', shape = '')
-ggsave('etoh_t_comparison/plots/bray_ema.png', dpi=600)
+ggsave('out/etoh_h_comparison/bray_ema.png', dpi=600)
 
 
 
