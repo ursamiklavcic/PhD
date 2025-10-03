@@ -10,16 +10,15 @@ library(scales)
 set.seed(96)
 theme_set(theme_bw())
 
-otutab <- readRDS('longitudinal_amplicons/data/otutab_ethanol_bulk.RDS')
-taxtab <- readRDS('longitudinal_amplicons/data/taxtab.RDS')
-metadata <- readRDS('longitudinal_amplicons/data/metadata.RDS')
-norm_rel <- readRDS('longitudinal_amplicons/data/otutab_normrel.RDS') %>%
+otutab <- readRDS('data/longitudinal_amplicons/otutab_ethanol_bulk.RDS')
+taxtab <- readRDS('data/longitudinal_amplicons/taxtab.RDS')
+metadata <- readRDS('data/longitudinal_amplicons/metadata.RDS')
+norm_rel <- readRDS('data/longitudinal_amplicons/otutab_normrel.RDS') %>%
   left_join(select(metadata, Group, original_sample), by = 'Group')
 
 #
 # Colors to be used
-col2 <- c('#66a5f1', '#f18e66')
-col4 <- c('#f0a336', '#3CB371', '#f35020', '#6490f0')
+col2 <- c('#3CB371', '#f0a336')
 
 # Define ethanol resistant OTUs and seqs! 
 otu_long <- norm_rel %>% 
@@ -97,7 +96,6 @@ long_all <- rbind(etoh_bacillota, non_etoh_bacillota, etoh_other, non_etoh_other
 
 long_all$Phylum <- factor(long_all$Phylum, levels = c('Bacillota', 'Bacteroidota', 'Actinomycetota', 'Pseudomonadota', 
                                                       'Verrucomicrobiota', 'unclassified Bacteria', 'Other'))
-saveRDS(long_all, 'longitudinal_amplicons/data/long_all.RDS')
 
 # The number and relative abundance of ethanol resistant fraction within bulk microbiota samples 
 res_relative <- data.frame()
@@ -116,7 +114,7 @@ relative <- ggplot(long_all) +
   geom_text(res_relative, mapping =aes(x = Phylum, y = 1, label = paste('p =', scientific(pvalue, digits =0))), size = 4) +
   scale_y_log10() +
   scale_fill_manual(values = col2) +
-  labs(x = '', y = 'log10(relative abundance)', fill = '') +
+  labs(x = '', y = 'Relative abundance [log10]', fill = '') +
   theme(legend.position = 'bottom', 
         axis.ticks.x = element_blank(), 
         plot.margin = unit(c(0, 0.2, 0.2, 0.2), "cm")) +
@@ -137,7 +135,7 @@ number <- long_all %>%
             position = position_dodge(width = 0.9)) +
   scale_fill_manual(values = col2) +
   # coord_cartesian(ylim = c(0, 1700)) +
-  labs(x = '', y = 'Number of OTUs', fill = '') +
+  labs(x = '', y = '# OTUs', fill = '') +
   theme(legend.position = 'bottom', 
         # margin(t, r, l, b)
         plot.margin = unit(c(0.1, 0.2, 0.2, 0.1), "cm")) + 
@@ -146,11 +144,194 @@ number <- long_all %>%
 number
 ggarrange(relative + labs(tag = 'A'), number + labs(tag = 'B'), 
           common.legend = TRUE, legend = 'bottom', ncol = 1, align = 'v', heights = c(0.8, 1))
-ggsave('longitudinal_amplicons/plots/realtive_number_etoh_non_OTUs.png', dpi = 600)
+ggsave('out/longitudinal_amplicons/OTU_realtive_number_etoh_non.png', dpi = 600)
 
 # 
 # Are ethanol resistant OTUs more likely to be shared or present in a single individual? 
 # An OTU is present in an individual, if we saw it in at elast 1/3 of the samples (n=4).
+
+long_fractions <- readRDS('~/projects/longitudinal_amplicons/data/r_data/long_fractions.RDS')
+
+unique(long_fractions$is_ethanol_resistant)
+# Figure 1 
+long <- long_fractions %>%
+  mutate(Phylum = case_when(
+    Phylum == 'Firmicutes' ~ 'Bacillota',
+    Phylum == 'Bacteroidetes' ~ 'Bacteroidota',
+    Phylum == 'Actinobacteria' ~ 'Actinomycetota',
+    Phylum == 'Proteobacteria' ~ 'Pseudomonadota',
+    Phylum == 'Bacteria_unclassified' ~ 'unclassified Bacteria',
+    Phylum == 'Fusobacteria' ~ 'Fusobacterium',
+    Phylum == 'Lentisphaerae' ~ 'Lentisphaerota',
+    Phylum == 'Synergistetes' ~ 'Synergistota',
+    Phylum == 'Tenericutes' ~ 'Mycoplasmatota',
+    Phylum == 'TM7' ~ 'Saccharibacteria',
+    Phylum == 'Verrucomicrobia' ~ 'Verrucomicrobiota',
+    Phylum == 'Deferribacteres' ~ 'Deferribacterota',
+    TRUE ~ Phylum )) %>%
+  filter(!(Phylum %in% c('Deferribacterota', 'Synergistota'))) %>%
+  mutate(is_ethanol_resistant = ifelse(is_ethanol_resistant == 'Ethanol resistant',
+                                       'Ethanol-resistant', 'Ethanol non-resistant'))
+
+long$Phylum <- factor(long$Phylum, levels = c('unclassified Bacteria', 'Verrucomicrobiota','Saccharibacteria',
+                                              'Mycoplasmatota', 'Lentisphaerota', 'Fusobacterium',
+                                              'Pseudomonadota', 'Actinomycetota','Bacteroidota',  
+                                              'Bacillota'))
+saveRDS(long, 'data/longitudinal_amplicons/long_all.RDS')
+
+tile <- long %>%
+  group_by(is_ethanol_resistant, Phylum) %>%
+  reframe(no_otus = n_distinct(name)) %>% 
+  #filter(no_otus > 1) %>%
+  complete(is_ethanol_resistant, Phylum, fill = list(no_otus = 0)) %>%
+  ggplot(aes(y = Phylum, x = is_ethanol_resistant)) +
+  geom_tile(color = 'black', fill = 'white') +
+  geom_text(aes(label = no_otus), size = 4) +
+  #ifelse(no_otus > 1, no_otus, '')), size = 4) +
+  scale_y_discrete(labels = c(
+    expression("unclassified " * italic("Bacteria")), 
+    expression(italic("Verrucomicrobiota")),
+    expression(italic("Saccharibacteria")), 
+    expression(italic("Mycoplasmatota")),
+    expression(italic("Lentisphaerota")),
+    expression(italic("Fusobacterium")),
+    expression(italic("Pseudomonadota")),
+    expression(italic("Actinomycetota")),
+    expression(italic("Bacteroidota")),
+    expression(italic("Bacillota")))) +
+  scale_x_discrete(labels = c('Ethanol\n non-resistant', 'Ethanol-resistant')) +
+  theme_minimal(base_size = 13) +
+  labs(x = '', y = '', fill = '') +
+  theme(plot.margin = unit(c(t = 0, r = 0, b = 0, l = 0), "cm"), 
+        panel.grid.major = element_blank())
+tile
+
+per <- long %>%
+  group_by(is_ethanol_resistant, Phylum) %>%
+  reframe(no_otus = n_distinct(name)) %>%
+  group_by(Phylum) %>%
+  mutate(sum = sum(no_otus), 
+         per = (no_otus/sum)*100) %>%
+  
+  #pivot_wider(names_from = 'is_ethanol_resistant', values_from = 'no_otus', values_fill = 0) %>%
+  ggplot(aes(x = per, y = Phylum, fill = is_ethanol_resistant)) +
+  geom_col() +
+  scale_fill_manual(values = col2) +
+  theme_minimal(base_size = 14) +
+  labs(x = '% OTUs', y = '', fill = '') +
+  theme(plot.margin = unit(c(0, 0, 0, 0), "cm"), 
+        panel.grid.major = element_blank(), 
+        legend.position = 'bottom', 
+        axis.ticks.x = element_line(linewidth = 1, colour = "black"),
+        axis.text.y = element_blank(), 
+        axis.ticks.y = element_blank())
+per
+
+# Second plot is relative abundance of OTUs that were determined EtOH and non EtOH 
+rel <- long %>%
+  ggplot(aes(y = Phylum, x = rel_abund, fill = is_ethanol_resistant)) +
+  geom_boxplot() +
+  #stat_compare_means(mapping = aes(label = paste('Wilcoxon, p', ..p.format..)), method = 'wilcox',  label.x = 1.3, vjust = 5) +
+  scale_fill_manual(values = col2) +
+  scale_x_log10() +
+  # scale_y_discrete(labels = c(
+  #   expression("unclassified " * italic("Bacteria")), 
+  #   expression(italic("Verrucomicrobiota")),
+  #   expression(italic("Saccharibacteria")), 
+  #   expression(italic("Mycoplasmatota")),
+  #   expression(italic("Lentisphaerota")),
+  #   expression(italic("Fusobacterium")),
+  #   expression(italic("Pseudomonadota")),
+  #   expression(italic("Actinomycetota")),
+  #   expression(italic("Bacteroidota")),
+  #   expression(italic("Bacillota")))) +
+  labs(y = '', x = 'Relative abundance [log10]') +
+  theme_bw(base_size = 14) +
+  theme(legend.position = 'none', plot.margin = unit(c(0, 0.5, 0, 0), "cm"), 
+        axis.text.y = element_blank())
+rel
+
+# plot % OTUs on y, x 0 prevalence % 
+unique(long$Phylum)
+group_by(long, Phylum) %>% 
+  filter(PA == 1) %>% 
+  reframe(n = n_distinct(name))
+
+prevalence <- long %>%
+  filter(Phylum %in% c('unclassified Bacteria', 'Pseudomonadota', 'Actinomycetota', 'Bacteroidota', 'Bacillota')) %>% 
+  mutate(time_point = as.integer(substr(Group, 3, 5))) %>%
+  group_by(is_ethanol_resistant, person, Phylum, name) %>%
+  reframe(timepoints_present = sum(PA == 1), 
+          timepoints_missing = sum(PA == 0), 
+          all_timepoints = timepoints_present + timepoints_missing) %>%
+  mutate(prevalence = (timepoints_present / all_timepoints) * 100) %>%
+  filter(prevalence > 0) %>% 
+  # Calculate number of OTUs per person x treatment x Phylum
+  group_by(is_ethanol_resistant, person, Phylum, prevalence) %>%
+  reframe(n_otus = sum(prevalence > 0)) %>% 
+  unique() 
+
+# Median lines per Phylum as well
+prevalence2 <- prevalence %>%
+  group_by(is_ethanol_resistant, Phylum, prevalence) %>%
+  reframe(median_n_otus = median(n_otus))
+
+prevalence$Phylum <- factor(prevalence$Phylum, levels = c('Bacillota', 'Bacteroidota',  
+                                                          'Actinomycetota','Pseudomonadota', 
+                                                          'unclassified Bacteria'))
+
+# Plot
+preval <- prevalence %>%  
+  ggplot(aes(x = prevalence, y = n_otus)) +
+  geom_point(data = prevalence %>% filter(is_ethanol_resistant == 'Ethanol-resistant'),
+             aes(group = interaction(person, Phylum)),
+             color = '#f0a336', size = 1.2, alpha = 0.3) +
+  geom_point(data = prevalence %>% filter(is_ethanol_resistant == 'Ethanol non-resistant'),
+             aes(group = interaction(person, Phylum)),
+             color = '#3CB371', size = 1.2, alpha = 0.3) +
+  geom_smooth(data = prevalence2,
+              mapping = aes(x = prevalence, y = median_n_otus, color = is_ethanol_resistant),
+              linewidth = 1.4, se = FALSE) +
+  facet_wrap(~Phylum, nrow = 1, scales = 'free_y') +  
+  scale_color_manual(values = col2) +
+  labs(x = 'Within-individual prevalence [% of timepoints present]',
+       y = '# OTUs') +
+  theme_bw(base_size = 14) +
+  theme(legend.position = 'none',
+        plot.margin = unit(c(0, 0.5, 0, 0), "cm"))
+preval
+
+tile_per_rel <- ggarrange(tile + labs(tag = 'A'), per + labs(tag = 'B'), rel + labs(tag = 'C'), 
+                          widths = c(.9, 1, 1), 
+                          ncol =  3, common.legend = TRUE, legend = 'bottom', align = 'h')
+tile_per_rel
+
+ggarrange(tile_per_rel, preval + labs(tag = 'D'), 
+          heights = c(1, .7), ncol = 1, common.legend = FALSE)
+
+ggsave('out/longitudinal_amplicons/OTU_composition_abundance.png', dpi = 600)
+
+# Statistics for prevalence 
+stat <- long %>% 
+  filter(Phylum %in% c('unclassified Bacteria', 'Pseudomonadota', 'Actinomycetota', 'Bacteroidota', 'Bacillota')) %>% 
+  mutate(time_point = as.integer(substr(Group, 3, 5))) %>%
+  group_by(is_ethanol_resistant, person, Phylum, name) %>%
+  reframe(timepoints_present = sum(PA == 1), 
+          timepoints_missing = sum(PA == 0), 
+          all_timepoints = timepoints_present + timepoints_missing, 
+          prevalence = (timepoints_present / all_timepoints) * 100) 
+
+wilcox.test(filter(stat, is_ethanol_resistant == 'Ethanol-resistant')$prevalence, 
+            filter(stat, is_ethanol_resistant == 'Ethanol non-resistant')$prevalence)
+# Wilcoxon rank sum test with continuity correction
+# 
+# data:  filter(stat, is_ethanol_resistant == "Ethanol-resistant")$prevalence and filter(stat, is_ethanol_resistant == "Ethanol non-resistant")$prevalence
+# W = 30291833, p-value = 1.97e-05
+# alternative hypothesis: true location shift is not equal to 0
+
+group_by(stat, Phylum) %>%  
+  reframe(wilcox.test(filter(stat, is_ethanol_resistant == 'Ethanol-resistant')$prevalence, 
+              filter(stat, is_ethanol_resistant == 'Ethanol non-resistant')$prevalence)$p.value)
 
 # Beta diversity 
 
@@ -164,10 +345,10 @@ calculate_min <- function(otu_data) {
 }
 
 
-etoh_bac_min <- calculate_min(etoh_bacillota) #78
+etoh_bac_min <- calculate_min(etoh_bacillota) #71
 etoh_other_min <- calculate_min(etoh_other) # 24
-non_etoh_bac_min <- calculate_min(non_etoh_bacillota) # 292
-non_etoh_other_min <- calculate_min(non_etoh_other) # 60
+non_etoh_bac_min <- calculate_min(non_etoh_bacillota) # 294
+non_etoh_other_min <- calculate_min(non_etoh_other) # 59
 
 # Function to calculate beta distances (Bray-Curtis OR Jaccard)
 min <- 24
@@ -400,15 +581,18 @@ sf <- long_all %>%
 
 ggplot(sf, aes(x = log10(mean_rel_abund), y = log10(sumsq_diff_abund), color = is_ethanol_resistant)) +
   geom_point() +
-  scale_color_manual(values = col) +
+  scale_color_manual(values = col2) +
   labs(x = 'Mean relative abundance of OTU', y = 'Sum of squared differences between realtive abudnances of an OTU in different samples', color = '')
-ggsave('endospore_dynamics/out/supplement_figure8.png', dpi = 600)
+ggsave('out/longitudinal_amplicons/sum_diff_relabund.png', dpi = 600)
 
 
 ggplot(sf, aes(x = log10(mean_rel_abund), y = log10(sumsq_diff_abund), color = fraction)) +
   geom_point() +
-  scale_color_manual(values = col4) +
   labs(x = 'Mean relative abundance of OTU', y = 'Sum of squared differences between realtive abudnances of an OTU in different samples', color = '') 
-ggsave('endospore_dynamics/out/supplement_figure8_fractions1.png', dpi = 600)
+ggsave('out/longitudinal_amplicons/sum_diff_relabund_fractions.png', dpi = 600)
+
+# What is the density of clustering between individuals ? 
+
+# What is the density of clustering between individuals "normal" timepoints and 'extreme event" points? 
 
 
