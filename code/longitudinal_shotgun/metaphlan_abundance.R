@@ -10,7 +10,6 @@ library(vegan)
 
 theme_set(theme_bw())
 col <- c('#3CB371', '#f0a336')
-col2 <- c('#A7E2C1', '#F7CD92')
 colm <- '#3CB371'
 cole <- '#f0a336'
 
@@ -74,51 +73,6 @@ domain %>%
   geom_col() +
   labs(x = '', y = 'Relative abundance [%]')
 ggsave('longitudinal_shotgun/plots/mpa_rel_abund_kingdom.png')    
-
-# Phylum level 
-phylum <- filter(abund, is.na(Class), !is.na(Phylum), Domain == 'Bacteria') %>% 
-  select(-c(Domain, Class, Order, Family, Genus, Species, SGB)) %>% 
-  pivot_longer(-Phylum) %>%  
-  left_join(metadata, by = join_by('name' == 'Group')) 
-
-phylum %>%  
-  group_by(biota) %>% 
-  mutate(rel_abund = value /sum(value) * 100) %>% 
-  ggplot(aes(x = biota, y = rel_abund, fill = Phylum)) +
-  geom_col() +
-  labs(x = '', y = 'Relative abundance [%]')
-ggsave('longitudinal_shotgun/plots/mpa_rel_abund_phylum.png') 
-
-
-# how many species did we recover in each phylum 
-bacteria <- filter(abund, Domain == 'Bacteria', !is.na(Phylum), !is.na(Class), 
-                   !is.na(Order), !is.na(Family), !is.na(Genus), !is.na(Species), !is.na(SGB)) %>% 
-  pivot_longer(-c(Domain, Phylum, Class, Order, Family, Genus, Species, SGB)) %>% 
-  left_join(metadata, by = join_by('name' == 'Group')) %>% 
-  mutate(PA = ifelse(value > 0, 1, 0))
-
-bacteria %>% 
-  ggplot(aes(x = value, y = Phylum, fill = biota)) +
-  geom_boxplot() + 
-  scale_x_log10() +
-  scale_fill_manual(values = col2) +
-  labs(x = 'Relative abundance [log10]', y = '', fill = 'Sample type') +
-  theme(legend.position = 'bottom')
-ggsave('longitudinal_shotgun/plots/rel_abund_phylum_boxplot.png')
-
-bacteria %>%
-  filter(PA == 1) %>% 
-  group_by(biota, Phylum) %>% 
-  reframe(sum = n_distinct(Species)) %>% 
-  ggplot(aes(x = sum, y = Phylum, fill = biota)) +
-  geom_col(position = position_dodge(width = 0.9)) +
-  geom_text(aes(label = sum),
-    position = position_dodge(width = 0.9), hjust = -0.1) +
-  scale_fill_manual(values = col2) +
-  labs(x = '# Species', y = '', fill = 'Sample\ntype') +
-  theme(legend.position = 'bottom')
-ggsave('longitudinal_shotgun/plots/n_species_phylum.png')
-
 # Archea
 archaea <- filter(abund, Domain == 'Archaea', !is.na(Species), !is.na(SGB)) %>% 
   pivot_longer(-c(Domain, Phylum, Class, Order, Family, Genus, Species, SGB)) %>%  
@@ -161,6 +115,66 @@ filter(eukaryota, value > 0) %>%
   theme(legend.position = 'bottom') +
   guides(color = guide_legend(nrow = 2, byrow = TRUE))
 ggsave('longitudinal_shotgun/plots/eukaryota_SGB.png')
+
+# Bacteria 
+# Phylum level 
+phylum <- filter(abund, is.na(Class), !is.na(Phylum), Domain == 'Bacteria') %>% 
+  select(-c(Domain, Class, Order, Family, Genus, Species, SGB)) %>% 
+  pivot_longer(-Phylum) %>%  
+  left_join(metadata, by = join_by('name' == 'Group')) 
+
+phylum %>%  
+  group_by(biota) %>% 
+  mutate(rel_abund = value /sum(value) * 100) %>% 
+  ggplot(aes(x = biota, y = rel_abund, fill = Phylum)) +
+  geom_col() +
+  labs(x = '', y = 'Relative abundance [%]')
+ggsave('longitudinal_shotgun/plots/mpa_rel_abund_phylum.png') 
+
+# how many species did we recover in each phylum 
+bacteria <- filter(abund, Domain == 'Bacteria', !is.na(Phylum), !is.na(Class), 
+                   !is.na(Order), !is.na(Family), !is.na(Genus), !is.na(Species), !is.na(SGB)) %>% 
+  pivot_longer(-c(Domain, Phylum, Class, Order, Family, Genus, Species, SGB)) %>% 
+  left_join(metadata, by = join_by('name' == 'Group')) %>% 
+  mutate(PA = ifelse(value > 0, 1, 0))
+
+bacteria %>% 
+  ggplot(aes(x = value, y = Phylum, fill = biota)) +
+  geom_boxplot() + 
+  scale_x_log10() +
+  scale_fill_manual(values = col) +
+  labs(x = 'Relative abundance [log10]', y = '', fill = '') +
+  theme(legend.position = 'bottom')
+ggsave('longitudinal_shotgun/plots/rel_abund_phylum_boxplot.png')
+
+# For together
+rel <- bacteria %>%
+  ggplot(aes(x = value, y = Phylum, fill = biota)) +
+  geom_boxplot() + 
+  scale_x_log10() +
+  scale_fill_manual(values = col) +
+  labs(x = 'Relative abundance [log10]', y = '', fill = '') +
+  theme(legend.position = 'bottom',  axis.text.y=element_blank(), axis.ticks.y=element_blank())
+rel
+
+no <- bacteria %>%
+  filter(PA == 1) %>% 
+  group_by(biota, Phylum) %>% 
+  reframe(sum = n_distinct(Species)) %>% 
+  ggplot(aes(x = sum, y = Phylum, fill = biota)) +
+  geom_col(position = position_dodge(width = 0.9)) +
+  geom_text(aes(label = sum),
+    position = position_dodge(width = 0.9), hjust = -0.1) +
+  scale_fill_manual(values = col) +
+  labs(x = '# Species', y = '', fill = '') +
+  theme(legend.position = 'bottom')
+ggsave('longitudinal_shotgun/plots/n_species_phylum.png')
+
+# both 
+ggarrange(no + labs(tag = 'A'), rel + labs(tag = 'B'), 
+          common.legend = TRUE, legend = 'bottom', 
+          widths = c(1, .7))
+ggsave('out/metaphlan/mpa_number_species_relabund.png')
 
 # Alpha diversity 
 n <- filter(bacteria, value > 0) %>% 
@@ -234,7 +248,6 @@ bacteria %>%
   labs(x = 'Day', y = 'Relative abundance [%]')
 ggsave('longitudinal_shotgun/plots/mpa_rel_abund_bact.png')
 
-
 bacteria %>% 
   filter(biota == 'ethanol treated sample') %>%
   ggplot(aes(x = factor(day), y = value, fill = Phylum)) +
@@ -245,11 +258,60 @@ ggsave('longitudinal_shotgun/plots/mpa_rel_abund_bact_etoh.png')
 
 
 # Beta diveristy 
+tab <- select(bacteria, SGB, name, value) %>% 
+  pivot_wider(names_from = 'name', values_from = 'value', values_fill = 0) %>% 
+  column_to_rownames('SGB') %>%  
+  t()
 
+dist <- vegdist(tab, method = 'bray')
+nmds <- metaMDS(dist)
 
+nmds_positions <- as.data.frame(scores(nmds, display="sites")) %>%
+  rownames_to_column('Group')
 
-# Sporulation ability 
-# Before this part run analysis in the folder code/sporulation_ability
-sporulation_ability <- read.table('data/sporulation_ability/sporulation_ability2021.tsv', sep = '\t', header = TRUE) %>% 
-  as_tibble()
+dist_meta = nmds_positions %>%
+  left_join(metadata, by = 'Group')
 
+dist_meta %>%
+  ggplot(aes(x=NMDS1, y=NMDS2, color=person, shape = biota)) +
+  geom_point(size = 5) +
+  labs(color = 'Individual', shape = '') +
+  theme(legend.position = 'bottom')
+ggsave('out/metaphlan/mps_nmds_bray_sample_type.png')
+
+dist_meta %>%
+  mutate(extreme = ifelse(extremevent_type != '', 'extreme event', '')) %>% 
+  ggplot(aes(x=NMDS1, y=NMDS2, color=person, shape = extreme)) +
+  geom_point(size = 5) +
+  labs(color = 'Individual', shape = '') +
+  theme(legend.position = 'bottom')
+ggsave('out/metaphlan/mpa_nmds_bray_extreme.png')
+
+# Distances between individuals samples and extreme events  etc. 
+# Tidy the Bray-Curtis matrix
+dist_long <- as.matrix(dist) %>%
+  as_tibble(rownames = 'Group') %>%
+  pivot_longer(-Group) %>%
+  filter(Group != name)
+
+meta <- select(metadata, Group, person, date, biota)
+
+dist_all <- dist_long %>%
+  mutate(sample_pairs = paste(Group, name)) %>%
+  group_by(sample_pairs) %>%
+  reframe(mean_value = mean(value, na.rm = TRUE), 
+            median_value = median(value, na.rm = TRUE)) %>%
+  separate(sample_pairs, into = c("Group", "name"), sep = " ") %>%
+  left_join(meta, by = 'Group') %>%
+  left_join(meta, by = join_by('name' == 'Group')) %>%
+  mutate(same_person = ifelse(person.x == person.y, 'Intra individual', 'Inter individual'), 
+         same_sample = ifelse(biota.x == biota.y, 'Same', 'Different'), 
+         date_dist = abs(date.x-date.y))
+
+dist_all %>%  filter(same_sample == 'Same') %>%  
+  ggplot() +
+  geom_boxplot(mapping = aes(x = same_person, y = median_value, fill = biota.x)) +
+  scale_fill_manual(values = col) +
+  labs(y = 'Median Bray-Curtis dissimilarity', x = '', fill = '') +
+  theme(legend.position = 'bottom') 
+ggsave('out/metaphlan/mpa_boxplot_bray.png')  
