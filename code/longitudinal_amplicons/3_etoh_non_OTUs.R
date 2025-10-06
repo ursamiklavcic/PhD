@@ -591,8 +591,170 @@ ggplot(sf, aes(x = log10(mean_rel_abund), y = log10(sumsq_diff_abund), color = f
   labs(x = 'Mean relative abundance of OTU', y = 'Sum of squared differences between realtive abudnances of an OTU in different samples', color = '') 
 ggsave('out/longitudinal_amplicons/sum_diff_relabund_fractions.png', dpi = 600)
 
+saveRDS(bray, 'data/longitudinal_amplicons/bray.RDS')
+saveRDS(jaccard, 'data/longitudinal_amplicons/jaccard.RDS')
+
 # What is the density of clustering between individuals ? 
+bray %>% 
+  filter(same_person == 'Intra individual') %>% 
+  ggplot(aes(x = person.x, y = median_value, color = is_ethanol_resistant, fill = is_ethanol_resistant)) +
+  geom_boxplot() +
+  #geom_point() +
+  facet_grid(~taxonomy) +
+  scale_fill_manual(values = col2) +
+  scale_color_manual(values = col2) +
+  labs(x = 'Individual', y = 'Median Bray-Curtis dissimilarity', fill = '', color = '') +
+  theme(legend.position = 'bottom')
+ggsave('out/longitudinal_amplicons/density_clustering_individuals_bray.png')  
+
+jaccard %>%  
+  filter(same_person == 'Intra individual') %>% 
+  ggplot(aes(x = person.x, y = median_value, color = is_ethanol_resistant, fill = is_ethanol_resistant)) +
+  geom_boxplot() +
+  #geom_point() +
+  facet_grid(~taxonomy) +
+  scale_fill_manual(values = col2) +
+  scale_color_manual(values = col2) +
+  labs(x = 'Individual', y = 'Median Jaccard distance', fill = '', color = '') +
+  theme(legend.position = 'bottom')
+ggsave('out/longitudinal_amplicons/density_clustering_individuals_jaccard.png')  
 
 # What is the density of clustering between individuals "normal" timepoints and 'extreme event" points? 
+# what is the median without extreme events and what is the distance with extreme events ? 
+bray <- readRDS( 'data/longitudinal_amplicons/bray.RDS')
+meta <- distinct(metadata, Group, extremevent_type)
 
+bray_extreme <- bray %>% 
+  filter(same_person == 'Intra individual') %>% 
+  mutate(Group_clean = substr(Group, 1, 5), 
+         name_clean = substr(name, 1, 5)) %>% 
+  left_join(meta, by = join_by('Group_clean' == 'Group')) %>%
+  left_join(meta, by = join_by('name_clean' == 'Group')) %>% 
+  mutate(event_pair = case_when(extremevent_type.x == "" & extremevent_type.y == "" ~ "normal-normal",  
+                                (extremevent_type.x == "" & extremevent_type.y != "") | 
+                                  (extremevent_type.x != "" & extremevent_type.y == "") ~ "extreme-normal", TRUE ~ "extreme-extreme"))
 
+bray_extreme %>% 
+  filter(event_pair != 'extreme-extreme') %>%  
+  ggplot(aes(x = person.x, y = median_value, fill = event_pair)) +
+  geom_boxplot() +
+  stat_compare_means(aes(group = event_pair), label = "p.signif", method = "wilcox.test") +
+  labs(x = 'Individual', y = 'Median Bray-Curtis value', fill = '', caption = 'ns: p > 0.05, *: p < 0.05, **: p < 0.01, ***: p <= 0.001, ****: p <= 0.0001') +
+  theme(legend.position = 'bottom')
+ggsave('out/longitudinal_amplicons/density_clustering_extreme_normal.png')
+
+# # NMDS
+# tab <- select(long_all, Group, name, value) %>%
+#   pivot_wider(names_from = 'name', values_from = 'value', values_fill = 0) %>%
+#   column_to_rownames('Group') %>%
+#   as.matrix()
+# 
+# dist <- vegdist(tab, meanfun = 'mean', iterations = 9999, dmethod = 'bray')
+# nmds <- metaMDS(dist)
+# nmds_positions = as.data.frame(scores(nmds, display="sites")) %>%
+#   rownames_to_column('Group')
+# 
+# dist_meta = nmds_positions %>%
+#   mutate(Group_clean = substr(Group, 1, 5)) %>%
+#   left_join(metadata, by = join_by('Group_clean' == 'Group'))
+# 
+# dist_meta %>%
+#   ggplot(aes(x=NMDS1, y=NMDS2, color=person, shape = extremevent_type)) +
+#   geom_point(size=3) 
+# 
+# 
+# # Statistical testing of distances between people/biota of one person/biotas of all samples...
+# # Calculate multivariate dispersions of microbiota and sporobiota
+# mod = betadisper(dist, dist_meta$person, type= 'median')
+# anova(mod)
+# # p-value is significant, which means persons are not dispersed homogenous
+# 
+# # tukeys test tells us which groups differ in relation to their variances - NONE
+# TukeyHSD(mod)
+# plot(mod)
+# boxplot(mod)
+
+# jaccard
+jaccard <- readRDS( 'data/longitudinal_amplicons/jaccard.RDS')
+
+jaccard_extreme <- jaccard %>% 
+  filter(same_person == 'Intra individual') %>% 
+  mutate(Group_clean = substr(Group, 1, 5), 
+         name_clean = substr(name, 1, 5)) %>% 
+  left_join(meta, by = join_by('Group_clean' == 'Group')) %>%
+  left_join(meta, by = join_by('name_clean' == 'Group')) %>% 
+  mutate(event_pair = case_when(extremevent_type.x == "" & extremevent_type.y == "" ~ "normal-normal",  
+                                (extremevent_type.x == "" & extremevent_type.y != "") | 
+                                  (extremevent_type.x != "" & extremevent_type.y == "") ~ "extreme-normal", TRUE ~ "extreme-extreme"))
+
+jaccard_extreme %>% 
+  filter(event_pair != 'extreme-extreme') %>%  
+  ggplot(aes(x = person.x, y = median_value, fill = event_pair)) +
+  geom_boxplot() +
+  stat_compare_means(aes(group = event_pair), label = "p.signif", method = "wilcox.test") +
+  labs(x = 'Individual', y = 'Median Jaccard value', fill = '', caption = 'ns: p > 0.05, *: p < 0.05, **: p < 0.01, ***: p <= 0.001, ****: p <= 0.0001') +
+  theme(legend.position = 'bottom')
+ggsave('out/longitudinal_amplicons/density_clustering_extreme_normal_jaccard.png')
+
+# Only differentiate ethanol-resistant and ethanol non-resistant 
+
+etoh <- filter(otu_long, substr(Group, 1, 1) == 'M' & name %in% etoh_otus) %>%
+  mutate(Group = paste0(Group, "-E"), is_ethanol_resistant = 'Ethanol resistant')
+# min = 78
+
+non_etoh <-  filter(otu_long, substr(Group, 1, 1) == 'M' & name %in% nonetoh_otus) %>%
+  mutate(Group = paste0(Group, "-N"), is_ethanol_resistant = 'Ethanol non-resistant')
+# min = 343
+
+long_en <- rbind(etoh, non_etoh)
+
+# Ethanol resistant community extreme events 
+tab <- etoh %>% 
+  select(Group, name, value) %>% 
+  mutate(Group = substr(Group, 1, 7)) %>%  
+  pivot_wider(names_from = 'name', values_from = 'value', values_fill = 0) %>% 
+  column_to_rownames('Group') %>%
+  as.matrix()
+tab
+
+dist <- vegdist(tab, meanfun = 'mean', iterations = 9999, dmethod = 'bray')
+nmds <- metaMDS(dist)
+nmds_positions = as.data.frame(scores(nmds, display="sites")) %>%
+  rownames_to_column('Group')
+
+dist_meta = nmds_positions %>%
+  mutate(Group_clean = substr(Group, 1, 5)) %>%
+  left_join(metadata, by = join_by('Group_clean' == 'Group'))
+
+dist_meta %>%
+  mutate(extreme = ifelse(extremevent_type != '', 'extreme event', '')) %>% 
+  ggplot(aes(x=NMDS1, y=NMDS2, color=person, shape = extreme)) +
+  geom_point(size = 5) +
+  labs(color = 'Individual', shape = '') +
+  theme(legend.position = 'bottom')
+ggsave('out/longitudinal_amplicons/nmds_bray_etoh.png')
+
+# Ethanol non-resistant 
+tab <- non_etoh %>% 
+  select(Group, name, value) %>% 
+  mutate(Group = substr(Group, 1, 7)) %>%  
+  pivot_wider(names_from = 'name', values_from = 'value', values_fill = 0) %>% 
+  column_to_rownames('Group') %>%
+  as.matrix()
+
+dist <- vegdist(tab, meanfun = 'mean', iterations = 9999, dmethod = 'bray')
+nmds <- metaMDS(dist)
+nmds_positions = as.data.frame(scores(nmds, display="sites")) %>%
+  rownames_to_column('Group')
+
+dist_meta = nmds_positions %>%
+  mutate(Group_clean = substr(Group, 1, 5)) %>%
+  left_join(metadata, by = join_by('Group_clean' == 'Group'))
+
+dist_meta %>%
+  mutate(extreme = ifelse(extremevent_type != '', 'extreme event', '')) %>% 
+  ggplot(aes(x=NMDS1, y=NMDS2, color=person, shape = extreme)) +
+  geom_point(size = 5) +
+  labs(color = 'Individual', shape = '') +
+  theme(legend.position = 'bottom')
+ggsave('out/longitudinal_amplicons/nmds_bray_nonetoh.png')
