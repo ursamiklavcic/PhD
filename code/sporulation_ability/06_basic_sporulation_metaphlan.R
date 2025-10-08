@@ -22,6 +22,9 @@ cole <- '#f0a336'
 sporulation_ability <- read.table('data/sporulation_ability/sporulation_ability2021.tsv', sep = '\t', header = TRUE) %>% 
   as_tibble()
 
+# Info on ethanol resistancy 
+etoh_species <- read.table('data/longitudinal_shotgun/ethanol_resistant_SGB.tsv', sep = '\t', header = T)
+
 metadata <- read.table('../longitudinal_shotgun/data/metadata.csv', sep = ';', header = TRUE) %>%  
   mutate(date = dmy(date))
 
@@ -51,10 +54,11 @@ abund2 <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_tab
   filter(name != 'MC013') %>% 
   left_join(metadata, by = join_by('name' == 'Group')) 
 
-abund3 <- filter(abund2, !is.na(sporulation_ability), Domain == 'Bacteria', biota == 'bulk microbiota')
+abund3 <- filter(abund2, !is.na(sporulation_ability), Domain == 'Bacteria', biota == 'bulk microbiota') %>% 
+  left_join(etoh_species, by = 'Species', relationship = 'many-to-many')
 
 # relative abudnance of spore/ non-spore forming 
-abund3 %>% 
+rel <- abund3 %>% 
   ggplot(aes(x = value, y = Phylum, fill = sporulation_ability)) +
   geom_boxplot() +
   scale_x_log10() +
@@ -63,6 +67,16 @@ abund3 %>%
   theme(legend.position = 'bottom') +
   stat_compare_means()
 ggsave('out/sporulation/SNS_rel_abund.png')
+
+abund3 %>% 
+  ggplot(aes(x = value, y = Phylum, fill = is_etoh_resistant)) +
+  geom_boxplot() +
+  scale_x_log10() +
+  #scale_fill_manual(values = col) +
+  labs(x = 'Relative abundance [log10]', y = '', fill = '') +
+  theme(legend.position = 'bottom') +
+  stat_compare_means()
+ggsave('out/sporulation/etoh_relabund.png')  
 
 # Is distribution of relative abundances for Bacillota the same for non-spore and spore-forming? 
 bacillota <- filter(abund3, Phylum == 'Bacillota')
@@ -76,7 +90,7 @@ wilcox.test(filter(bacillota, sporulation_ability == 'Spore-former')$value, filt
 # alternative hypothesis: true location shift is greater than 0
 
 # Number of species 
-abund3 %>% 
+no <- abund3 %>% 
   mutate(PA = ifelse(value > 0, 1, 0)) %>%  
   filter(PA == 1) %>% 
   group_by(sporulation_ability, Phylum) %>% 
@@ -146,18 +160,23 @@ group_by(wt, person) %>%
 # 8 H          1.07e-31
 # 9 I          1.07e-31
 
-preval3 %>% 
+preval_plot <-preval3 %>% 
   filter(Phylum == 'Bacillota') %>% 
   ggplot(aes(x = prevalence, y = per_species, color = person)) +
   geom_line(linewidth = 2) +
   geom_point(size = 2) +
-  annotate("text", x = 50, y = 10, label = paste0('Wilcox test; p < ', scientific(wt_results$p.value, digits = 3)), color = 'black') +
-  facet_wrap(~sporulation_ability, nrow = 2, scales = 'free_y') +
+  #annotate("text", x = 50, y = 10, label = paste0('Wilcox test; p < ', scales::scientific(wt_results$p.value, digits = 3)), color = 'black') +
+  facet_wrap(~sporulation_ability, nrow = 1, scales = 'free_y') +
   #scale_color_manual(values = col2) +
   labs(x = 'Prevalence [days present within person]', y = expression(paste(italic("Bacillota"), " species [% of species at this prevalence]")), color = '') +
-  theme(legend.position = 'bottom')
+  theme(legend.position = 'bottom', guide_legend(nrow = 1))
 ggsave('out/sporulation/SNS_prevalence_person_Bacillota.png')
 
+rel_no <- ggarrange(no, rel + theme(axis.text.y = element_blank()), common.legend = T, 
+                    legend = 'bottom', widths = c(1, 0.7))
+ggarrange(rel_no + labs(tag = 'A'), preval_plot + labs(tag = 'B'), 
+          nrow = 2, common.legend = F)
+ggsave('out/sporulation/number_rel_prevalence.png')
 
 # Alpha diveristy 
 bacillota <- mutate(bacillota, name = paste0(ifelse(sporulation_ability == 'Spore-former', 'S_', 'NS_'),name))
