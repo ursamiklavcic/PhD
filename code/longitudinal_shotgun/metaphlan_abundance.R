@@ -7,6 +7,7 @@ library(lubridate)
 library(tidyr)
 library(ggnewscale)
 library(vegan)
+library(ggpubr)
 
 theme_set(theme_bw())
 col <- c('#3CB371', '#f0a336')
@@ -73,20 +74,34 @@ domain %>%
   geom_col() +
   labs(x = '', y = 'Relative abundance [%]')
 ggsave('longitudinal_shotgun/plots/mpa_rel_abund_kingdom.png')    
+
 # Archea
 archaea <- filter(abund, Domain == 'Archaea', !is.na(Species), !is.na(SGB)) %>% 
   pivot_longer(-c(Domain, Phylum, Class, Order, Family, Genus, Species, SGB)) %>%  
   left_join(metadata, by = join_by('name' == 'Group')) 
 
-archaea %>% 
+ag <- archaea %>% 
+  filter(value > 0) %>%  
+  ggplot(aes(x = person, y = value/n_distinct(name), fill = Genus)) +
+  geom_col() +
+  scale_fill_manual(values = c('#27CFF5', '#671BA6')) +
+  labs(x ='Individual', y = 'Mean relative abundance across samples of a person [%]') +
+  theme(legend.position = 'bottom')
+ag
+
+as <- archaea %>% 
   filter(value > 0) %>%  
   ggplot(aes(x = as.factor(day), y = value, fill = Species)) +
   geom_col(position = 'dodge') +
+  scale_fill_manual(values = c('#27CFF5', '#671BA6')) +
   facet_wrap(~person, scales = 'free', nrow = 5) +
-  scale_fill_manual(values = col2) +
   labs(x = 'Day', y = 'Relative abundance [%]') +
   theme(legend.position = 'bottom') 
+as
 ggsave('longitudinal_shotgun/plots/archaea_species.png')
+
+ggarrange(ag + labs(tag = 'A'), as + labs(tag = 'B'), 
+          widths = c(0.6, 1))
 
 archaea %>% 
   filter(value > 0) %>%  
