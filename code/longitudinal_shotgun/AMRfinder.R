@@ -58,11 +58,11 @@ amr %>% summarise(n_distinct(ARG))
 amr %>% summarise(n_distinct(Class))
 
 amr_simplyfied <- amr %>%
-  mutate(Class = case_when(
-    str_detect(Class, "LINCOSAMIDE") ~ "LINCOSAMIDE",
-    str_detect(Class, "MACROLIDE") ~ "MACROLIDE",
-    str_detect(Class, "PHENICOL") ~ "PHENICOL",
-    TRUE ~ Class))
+  group_by(Class) %>%
+  mutate(sum_unique = n_distinct(ARG)) %>% 
+  ungroup() %>% 
+  filter(sum_unique > 5) %>% 
+  select(-sum_unique)
 
 amr_simplyfied$mechanism_resistence <- factor(amr_simplyfied$mechanism_resistence, 
                                               levels = c('antibiotic efflux', 
@@ -121,7 +121,7 @@ amr %>%
 ggsave('out/ARGs/AMRf_mechanisms_unique.png')
 
 # Number of unique mechanisms colored by class
-amr_tpm <- amr_simplyfied %>%
+amr_tpm <- amr %>%
   group_by(mechanism_resistence, Class) %>%
   reframe(sum_TPM = round(sum(TPM))) %>% 
   ggplot(aes(x = sum_TPM, y = reorder(Class, sum_TPM), fill = mechanism_resistence)) +
@@ -129,10 +129,10 @@ amr_tpm <- amr_simplyfied %>%
   geom_label(aes(x = sum_TPM, label = sum_TPM), size = 3) +
   labs(y = '', x = 'TPM', fill = 'Mechanism of resistence') +
   theme(legend.position = 'bottom') +
-  guides(fill = guide_legend(ncol = 2))
+  guides(fill = guide_legend(nrow = 1))
 amr_tpm
 
-amr_unique <- amr_simplyfied %>%
+amr_unique <- amr %>%
   group_by(mechanism_resistence, Class) %>%
   reframe(unique = n_distinct(ARG)) %>%
   group_by(Class) %>% 
@@ -142,7 +142,7 @@ amr_unique <- amr_simplyfied %>%
   geom_label(aes(x = unique, label = unique), size = 3) +
   labs(y = '', x = '# unique ARGs', fill = 'Mechanism of resistence') +
   theme(legend.position = 'bottom') +
-  guides(fill = guide_legend(ncol = 2))
+  guides(fill = guide_legend(nrow = 1))
 amr_unique
 
 ggarrange(amr_unique + labs(tag = 'A'), 
@@ -194,22 +194,45 @@ amr_tax <- amr_simplyfied %>%
          Kingdom = str_extract(Tax, 'k_[^;]+'), 
          Class2 = str_extract(Tax, 'c_[^;]+'))
 
+# How much reads mapped from each phyla? 
 amr_tax %>%
+  group_by(Class, Phylum) %>% 
+  reframe(TPM = sum(TPM)) %>% 
   ggplot(aes (x = TPM, y = reorder(Class, TPM), fill = Phylum)) +
   geom_col() +
+  #geom_label(aes(label = TPM)) +
   scale_fill_manual(values = c('#d94343', '#0c9910','#3472b7', '#b73485', '#f1f011', 'lightgrey' )) +
   theme(legend.position = 'bottom') +
   labs(y = '')
-ggsave('out/ARGs/AMRf_taxonomy_class_TPM.png')
+ggsave('out/ARGs/AMRf_taxonomy_class_TPM_simple.png')
 
+# Which phylum has the highest number of unique ARGs? 
+amr_tax$Phylum <- factor(amr_tax$Phylum, levels = c('NA', 'Pseudomonadota', 'Actinomycetota', 'Bacteroidota', 'Bacillota'))
 
-amr_tax %>%
-  ggplot(aes (x = TPM, y = reorder(Phylum, TPM), fill = Class)) +
+unique_tax <- amr_tax %>%
+  group_by(Class, Phylum) %>%  
+  reframe(unique = n_distinct(ARG)) %>%  
+  ggplot(aes (x = unique, y = Phylum, fill = Class)) +
   geom_col() +
   #scale_fill_manual(values = c('#d94343', '#0c9910','#3472b7', '#b73485', '#f1f011', 'lightgrey' )) +
   theme(legend.position = 'bottom') +
+  labs(y = '', x = '# unique ARGs')
+ggsave('out/ARGs/AMRf_taxonomy_class_unique_simple.png')
+
+# Which phylum has the highest abundance of ARGs? 
+tpm_tax <- amr_tax %>%
+  group_by(Class, Phylum) %>%  
+  reframe(TPM = sum(TPM)) %>%  
+  ggplot(aes (x = TPM, y = Phylum, fill = Class)) +
+  geom_col() +
+  #scale_fill_manual(values = c('#d94343', '#0c9910','#3472b7', '#b73485', '#f1f011', 'lightgrey' )) +
+  theme(legend.position = 'bottom', axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
   labs(y = '')
-ggsave('out/ARGs/AMRf_taxonomy_class_TPM_v2.png')
+ggsave('out/ARGs/AMRf_taxonomy_class_TPM_simple_unique.png')
+
+ggarrange(unique_tax +labs(tag = 'A'), tpm_tax + labs(tag = 'B'), 
+          common.legend = T, legend =  'bottom')
+ggsave('out/ARGs/AMRf_unique_tpm_ARGs_taxonomy.png', dpi = 600)
 
 ## 
 # Persistence of ARgs within an individual 
@@ -234,12 +257,13 @@ present <- amr_simplyfied %>%
           percent_args = (n_args_class/all_args) *100) 
   
 present %>% 
-  ggplot(aes(y = percent_args, x = prevalence, color = Class)) +
+  ggplot(aes(y = percent_args, x = prevalence, color = person)) +
   geom_point(size = 2) +
+  geom_line(linewidth = 1.2) +
   #geom_smooth(se = F) +
   scale_x_continuous(breaks = seq(0, 100, by = 25)) +
   labs(y = '', x = '# timepoints an ARG was found', color = 'Individual') +
-  facet_wrap(~person, scales = 'free_x')
+  facet_wrap(~Class, scales = 'free_x')
 ggsave('out/ARGs/AMRf_args_present.png')
 
 
@@ -291,118 +315,7 @@ amr_alpha <- select(alpha, name, richness, shannon, person, date, time_point) %>
 amr_alpha %>% 
   ggplot(aes(x = shannon, y = TPM)) +
   geom_smooth(se = F) +
-  geom_point(aes(color = Class)) +
+  geom_point(size = 2, aes(color = Class)) +
   facet_wrap(~person, scales = 'free')
 ggsave('out/ARGs/tpm_shannon.png')
 
-# Hypothesis 3: Does an increase of ARGs correlate with decrease in diversity
-
-##
-## Alpha diversity 
-##
-
-# # Is this in any way correlated with alpha diversity? 
-# 
-# otutabEM <- readRDS('~/projects/longitudinal_amplicons/data/r_data/otutabEM.RDS')
-# richnessEM = estimateR(otutabEM) # observed richness and Chao1
-# evennessEM = diversity(otutabEM)/log(specnumber(otutabEM)) # evenness index
-# shannonEM = diversity(otutabEM, index = 'shannon')
-# 
-# # Join all calculations and metadata
-# alpha_meta = as_tibble(as.list(evennessEM)) %>% pivot_longer(names_to = 'Group', values_to = 'evenness', cols = starts_with(c('M', 'S'))) %>%
-#   left_join(t(richnessEM) %>% as.data.frame() %>% rownames_to_column('Group'), by='Group') %>%
-#   left_join(as_tibble(as.list(shannonEM)) %>% pivot_longer(names_to = 'Group', values_to = 'shannon', cols = starts_with(c('M', 'S')))) %>%
-#   left_join(metadata, by='Group') %>%
-#   mutate(person2 = person) 
-# 
-# # Function to calculate correlation values for each ARGs class and the shannon diversity
-# amr_alpha <- amr %>%
-#   group_by(Group, person, time_point, Class) %>%
-#   filter(TPM > 0) %>%
-#   reframe(sum_tpm = sum(TPM), 
-#           sum_unique = n_distinct(ARG)) %>%
-#   left_join(alpha_meta, by = c('Group', 'person', 'time_point'))
-# 
-# amr_alpha %>% 
-#   ggplot(aes(x = shannon, y = log10(sum_tpm))) +
-#   geom_point(mapping = aes(color = person), size = 2) +
-#   geom_smooth(method = 'lm') +
-#   stat_cor() +
-#   facet_wrap(~Class, scales = 'free') +
-#   labs(x = 'Shannon diveristy index', y = 'log (TPM)', color = 'Individual') +
-#   theme(legend.position = 'bottom') +
-#   guides(color = guide_legend(nrow = 1))
-# ggsave('out/ARGs/AMRf_corr_tpm.png')
-# 
-# 
-# amr_alpha %>% 
-#   ggplot(aes(x = shannon, y = sum_unique)) +
-#   geom_point(mapping = aes(color = person), size = 2) +
-#   geom_smooth(method = 'lm') +
-#   stat_cor() +
-#   scale_y_continuous(label = scales::comma) +
-#   facet_wrap(~Class, scales = 'free_y') +
-#   labs(x = 'Shannon diveristy index', y = '# ARGs', color = 'Individual') +
-#   theme(legend.position = 'bottom') +
-#   guides(color = guide_legend(nrow = 1))
-# ggsave('out/ARGs/AMRf_corr_unique.png')
-# 
-# # Correlations calculation 
-# results = data.frame()
-# for (j in unique(amr$Class)) {
-#   x = amr %>% 
-#     filter(Class == j & TPM > 0 & !is.na(TPM)) %>%
-#     group_by(Group, person, time_point, Class) %>%
-#     reframe(sum_tpm = sum(TPM), 
-#             sum_unique = n_distinct(ARG)) %>%
-#     left_join(alpha_meta, by = c('Group', 'person', 'time_point'))
-#   
-#   corr_tpm <- cor.test(x$sum_tpm, x$shannon, method = 'pearson')
-#   corr_unique <- cor.test(x$sum_unique, x$shannon, method = 'pearson')
-#   
-#   results = rbind(results, data.frame(
-#     Class = j, 
-#     corr_tpm = corr_tpm$estimate, 
-#     p_tpm = corr_tpm$p.value, 
-#     corr_uniq = corr_unique$estimate, 
-#     p_uniq = corr_unique$p.value))
-#   
-# }
-# 
-# results
-# 
-# ## Correlations between unique number of ARGs and shannon 
-# filter(results, !is.na(corr_uniq)) %>% 
-#   mutate(biota = 'Microbiota',
-#          signif_label = case_when(p_uniq <= 0.001 ~ "***", p_uniq <= 0.01 ~ "**",
-#            p_uniq <= 0.05 ~ "*", TRUE ~ ""), 
-#          label = paste0(sprintf("%.3f", corr_uniq), ' ', signif_label)) %>%
-#   ggplot(aes(x = biota, y = Class, fill = corr_uniq)) +
-#   geom_tile() +
-#   geom_text(aes(label = label), color = 'black', size = 4) +
-#   scale_fill_gradient2(low = "#3472b7", mid = "white", high = "#0c9910", midpoint = 0) +
-#   labs(
-#     caption = "Correlation between the number of unique ARGs \n and Shannon's diversity index based on OTUs",
-#     y = '', x = '', fill = "Correlation Coefficient"
-#   ) +
-#   theme_bw(base_size = 12)
-# 
-# ggsave('out/ARGs/AMFf_corr_unique.png')
-# 
-# # between TPM to ARGs and shannon
-# filter(results, !is.na(corr_uniq)) %>% 
-#   mutate(biota = 'Microbiota',
-#          signif_label = case_when(p_tpm <= 0.001 ~ "***", p_tpm <= 0.01 ~ "**",
-#                                   p_tpm <= 0.05 ~ "*", TRUE ~ ""), 
-#          label = paste0(sprintf("%.3f", corr_tpm), ' ', signif_label)) %>%
-#   ggplot(aes(x = biota, y = Class, fill = corr_tpm)) +
-#   geom_tile() +
-#   geom_text(aes(label = label), color = 'black', size = 4) +
-#   scale_fill_gradient2(low = "#3472b7", mid = "white", high = "#0c9910", midpoint = 0) +
-#   labs(
-#     caption = "Correlation between the TPM of ARGs \n and Shannon's diversity index based on OTUs",
-#     y = '', x = '', fill = "Correlation Coefficient"
-#   ) +
-#   theme_bw(base_size = 12)
-# 
-# ggsave('out/ARGs/AMFf_corr_tpm.png')
