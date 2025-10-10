@@ -129,7 +129,7 @@ preval3 <- abund3 %>%
   group_by(person, sporulation_ability, Phylum, prevalence) %>%
   reframe(n_species_person_spore_phylum = n_distinct(Species), 
           per_species = (n_species_person_spore_phylum / all_species_per_person) * 100) %>% 
-  unique() 
+  dsitinct() 
 
 # Statistics for prevalence ? 
 wt <- abund3 %>% 

@@ -209,6 +209,8 @@ alpha <- left_join(n, as_tibble(as.list(shannon)) %>%
   left_join(metadata, by = join_by('name' == 'Group')) %>% 
   mutate(person2 = person) 
 
+saveRDS(alpha, 'data/longitudinal_shotgun/alpha_diveristy.RDS')
+
 # event data
 # event_data <- metadata %>%
 #   select(person, day, extremevent_type) %>%
