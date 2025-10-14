@@ -421,3 +421,14 @@ amr_persistence %>%
   group_by(person) %>%  
   reframe(len = n_distinct(ARG))
 
+# Table for thesis 
+table_amrs <- amr %>% 
+  group_by(Class, ARG, person, day) %>% 
+  reframe(PA = ifelse(TPM > 0, 1, 0)) %>%  
+  group_by(Class, ARG, person) %>%  
+  reframe(sum = sum(PA)) %>% 
+  filter(sum > 10) %>%  
+  group_by(Class, ARG) %>% 
+  reframe(n = n_distinct(person))
+
+write_csv2(table_amrs, 'out/ARGs/table.csv')
