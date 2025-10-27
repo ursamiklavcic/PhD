@@ -135,7 +135,7 @@ saveRDS(taxtab, 'etoh_t_comparison/data/r_data/taxtab.RDS')
 unique(taxtab$Phylum)
 
 # Import metadata
-metadata <- as_tibble(read.csv('etoh_t_comparison/data/metadata.csv', sep=',')) %>%
+metadata <- as_tibble(read.csv('data/etoh_h_comparison/metadata.csv', sep=',')) %>%
   filter(Group %in% rownames(otutab))
 
 # remove unnecessary 
@@ -186,10 +186,10 @@ cfu %>%
   reframe(mean_CFU = mean(CFU, na.rm = TRUE)) %>%
   mutate(cultivation_media = ifelse(cultivation_media == 'Liquid media', 'Enrichment before plating', 'Only plating')) %>%  
   ggplot(aes(x = cultivation_day, y=mean_CFU, color=treatment)) +
-  geom_point(size = 3, position = position_dodge(width=0.2)) +
+  geom_point(size = 4, position = position_dodge(width=0.4)) +
   geom_line(aes(linetype = bile_acids), linewidth = 1, position = position_dodge(width=0.2)) +
   facet_grid(~cultivation_media) +
-  labs(x = 'Cultivation day', y = 'CFU', color = 'Treatment', linetype = '') +
+  labs(x = 'Cultivation day', y = 'CFU [mean]', color = 'Treatment', linetype = '') +
   theme(legend.position = 'right')
 ggsave("out/etoh_h_comparison/CFU.png", dpi=600)
 
@@ -241,10 +241,10 @@ left_join(filter(cultivationPA, cultivation_media != 'Stool sample'),
           filter(cultivationPA, cultivation_media == 'Stool sample'), by = 'Phylum') %>% 
   mutate(cultivation_media.x = ifelse(cultivation_media.x == 'Liquid media', 'Enrichment before plating', 'Only plating'),
          ratio_OTUs = sumPA.x/sumPA.y) %>%  
-  ggplot(aes(x = as.factor(cultivation_day.x), y = ratio_OTUs, color = treatment.x, shape = bile_acids.x)) +
+  ggplot(aes(x = as.factor(cultivation_day.x), y = ratio_OTUs, color = Phylum, shape = treatment.x)) +
   geom_jitter(size = 4, width = 0.3) +
   scale_y_continuous(breaks = c(0, 0.5, 1), limits = c(0, 1)) +
-  facet_grid(Phylum ~ cultivation_media.x, space = 'free') +
+  facet_grid(bile_acids.x ~ cultivation_media.x, space = 'free') +
   labs(x = 'Cultivation day', y = expression(paste(frac('#OTUs [treatment & culture]', '# OTUs [stool sample]'))), shape = '', color = '') +
   theme(legend.position = 'bottom')
 ggsave('out/etoh_h_comparison/ratio_otus.png')
