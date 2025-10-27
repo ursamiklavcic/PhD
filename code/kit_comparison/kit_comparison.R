@@ -14,8 +14,9 @@ library(ggpubr)
 set.seed(96)
 theme_set(theme_bw())
 
+
 # Exploration
-shared = read.table('kit_comparison/data/mothur/stability.trim.contigs.good.unique.good.filter.unique.precluster.denovo.vsearch.pick.opti_mcc.shared', sep = '\t', header = TRUE) %>%
+shared = read.table('data/kit_comparison/mothur/stability.trim.contigs.good.unique.good.filter.unique.precluster.denovo.vsearch.pick.opti_mcc.shared', sep = '\t', header = TRUE) %>%
   select(Group, starts_with('Otu')) %>%
   pivot_longer(-Group)
 
@@ -119,7 +120,7 @@ saveRDS(otutab, 'kit_comparison/data/r_data/otutab.RDS')
 otu_names = as.data.frame(otutab) %>% colnames() 
 
 # Import taxonomy table
-taxtab = read.table('kit_comparison/data/mothur/stability.trim.contigs.good.unique.good.filter.unique.precluster.denovo.vsearch.pick.opti_mcc.0.03.cons.taxonomy', sep = '\t', header = TRUE) %>%
+taxtab = read.table('data/kit_comparison/mothur/stability.trim.contigs.good.unique.good.filter.unique.precluster.denovo.vsearch.pick.opti_mcc.0.03.cons.taxonomy', sep = '\t', header = TRUE) %>%
   filter(OTU %in% otu_names) %>%
   select(name = "OTU", taxonomy = "Taxonomy") %>%
   mutate(taxonomy = str_replace_all(taxonomy, "\\\\|\\\"|\\(\\d+\\)", ""),
@@ -129,7 +130,7 @@ taxtab = read.table('kit_comparison/data/mothur/stability.trim.contigs.good.uniq
 saveRDS(taxtab, 'kit_comparison/data/r_data/taxtab.RDS')
 
 # Import metadata
-metadata = as_tibble(read.csv('kit_comparison/data/metadata.csv', sep=',')) %>%
+metadata = as_tibble(read.csv('data/kit_comparison/metadata.csv', sep=',')) %>%
   filter(Group %in% rownames(otutab))
 
 # remove unnecessary 
@@ -144,7 +145,7 @@ rm(shared)
 # DNA concentrations 
 col_kit = c("#D22B2B", "#2E9FDF", "#E7B800", '#27ae60')
 
-conc = as_tibble(read.csv('kit_comparison/data/concentration.csv', sep=',')) %>%
+conc = as_tibble(read.csv('data/kit_comparison/concentration.csv', sep=',')) %>%
   filter(Organism != 'Negative control') %>%
   mutate(Concentration = if_else(Concentration < 0, 0, Concentration))# write 0 if the concentration is under the detection limit
 
@@ -268,16 +269,36 @@ rel_abund <- otutab %>%
   group_by(kit, Phylum) %>% 
   summarise(sum = sum(rel_abund)/n_distinct(Group) * 100) %>% 
   ungroup() %>% 
-  filter(sum > 0.01) %>% 
+  mutate(Phylum = ifelse(sum < 0.01, '< 0.01%', Phylum))  %>% 
+  mutate(Phylum = case_when(
+  Phylum == 'Firmicutes' ~ 'Bacillota',
+  Phylum == 'Bacteroidetes' ~ 'Bacteroidota',
+  Phylum == 'Actinobacteria' ~ 'Actinomycetota',
+  Phylum == 'Proteobacteria' ~ 'Pseudomonadota',
+  Phylum == 'Bacteria_unclassified' ~ 'unclassified Bacteria',
+  Phylum == 'Fusobacteria' ~ 'Fusobacterium',
+  Phylum == 'Lentisphaerae' ~ 'Lentisphaerota',
+  Phylum == 'Synergistetes' ~ 'Synergistota',
+  Phylum == 'Tenericutes' ~ 'Mycoplasmatota',
+  Phylum == 'TM7' ~ 'Saccharibacteria',
+  Phylum == 'Verrucomicrobia' ~ 'Verrucomicrobiota',
+  Phylum == 'Deferribacteres' ~ 'Deferribacterota',
+  TRUE ~ Phylum ))
+
+unique(rel_abund$Phylum)
+
+rel_abund$Phylum <- factor(rel_abund$Phylum, levels = c('Bacillota', 'Bacteroidota', 'Actinomycetota', 'Pseudomonadota', 'Verrucomicrobiota',
+                                                        'Saccharibacteria', 'Lentisphaerota', 'Synergistota', 'unclassified Bacteria', '< 0.01%'))
+rel_plot <- rel_abund %>%  
   ggplot(aes(x = kit, y = sum, fill = Phylum)) +
   geom_col() +
   labs(x = '', y = 'Relative abundance [%]')
-rel_abund
+
 
 ggarrange(conc_plot + labs(tag = 'A'), shannon + labs(tag = 'B'),  
-          kits + labs(tag = 'C'), rel_abund + labs(tag = 'D'),
+          kits + labs(tag = 'C'), rel_plot + labs(tag = 'D'),
           nrow = 2, ncol = 2)
-ggsave('kit_comparison/plots/kit_comparison_v2.png', dpi = 600) 
+ggsave('out/kit_comparison/01_kit_comparison.png', dpi = 600) 
 
 
 
