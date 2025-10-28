@@ -240,14 +240,35 @@ cultivationPA <- filter(otu_cultivation, value > 0, Phylum != 'Other') %>%
 left_join(filter(cultivationPA, cultivation_media != 'Stool sample'), 
           filter(cultivationPA, cultivation_media == 'Stool sample'), by = 'Phylum') %>% 
   mutate(cultivation_media.x = ifelse(cultivation_media.x == 'Liquid media', 'Enrichment before plating', 'Only plating'),
-         ratio_OTUs = sumPA.x/sumPA.y) %>%  
-  ggplot(aes(x = as.factor(cultivation_day.x), y = ratio_OTUs, color = Phylum, shape = treatment.x)) +
-  geom_jitter(size = 4, width = 0.3) +
+         ratio_OTUs = sumPA.x/sumPA.y, 
+         cultivation_day.x = factor(cultivation_day.x, levels = c(2, 5, 7, 14)), 
+         Phylum = factor(Phylum, levels = c('unclassified Bacteria', 'Verrucomicrobiota', 'Pseudomonadota', 'Actinomycetota', 'Bacteroidota', 'Bacillota')) )%>% 
+  ggplot(aes(x = treatment.x, y = ratio_OTUs, color = bile_acids.x))+
+  geom_jitter(aes(size = cultivation_day.x), width = .3) +
   scale_y_continuous(breaks = c(0, 0.5, 1), limits = c(0, 1)) +
-  facet_grid(bile_acids.x ~ cultivation_media.x, space = 'free') +
-  labs(x = 'Cultivation day', y = expression(paste(frac('#OTUs [treatment & culture]', '# OTUs [stool sample]'))), shape = '', color = '') +
+  scale_size_manual(values = c(2, 5, 7, 14)) +
+  facet_grid(Phylum ~ cultivation_media.x, space = 'free') +
+  labs(x = '', y = expression(paste(frac('#OTUs [treatment & culture]', '# OTUs [stool sample]'))), size = 'Cultivation day', color = '') +
   theme(legend.position = 'bottom')
 ggsave('out/etoh_h_comparison/ratio_otus.png')
+
+left_join(filter(cultivationPA, cultivation_media != 'Stool sample'), 
+          filter(cultivationPA, cultivation_media == 'Stool sample'), by = 'Phylum') %>% 
+  mutate(cultivation_media.x = ifelse(cultivation_media.x == 'Liquid media', 'Enrichment before plating', 'Only plating'),
+         ratio_OTUs = sumPA.x/sumPA.y, 
+         cultivation_day.x = factor(cultivation_day.x, levels = c(2, 5, 7, 14)), 
+         Phylum = factor(Phylum, levels = c('unclassified Bacteria', 'Verrucomicrobiota', 'Pseudomonadota', 'Actinomycetota', 'Bacteroidota', 'Bacillota')) )%>% 
+  group_by(treatment.x, bile_acids.x, cultivation_day.x, cultivation_media.x, Phylum) %>%  
+  reframe(ratio_OTUs = mean(ratio_OTUs)) %>%  
+  ggplot(aes(x = treatment.x, y = ratio_OTUs, color = bile_acids.x))+
+  geom_jitter(aes(size = cultivation_day.x), width = .3) +
+  #geom_text(aes(label = cultivation_day.x), color = 'black', position = 'jitter') +
+  scale_y_continuous(breaks = c(0, 0.5, 1), limits = c(0, 1)) +
+  scale_size_manual(values = c(2, 5, 7, 14)) +
+  facet_grid(Phylum ~ cultivation_media.x, space = 'free') +
+  labs(x = '', y = expression(paste(frac('#OTUs [treatment & culture]', '# OTUs [stool sample]'))), size = 'Cultivation day', color = '') +
+  theme(legend.position = 'bottom')
+ggsave('out/etoh_h_comparison/ratio_otus_v2.png')
 
 filter(otu_cultivation, #treatment == c('cult_100', 'cult_70'), 
        value > 0, Phylum != 'Other') %>%
@@ -282,23 +303,27 @@ otu_long %>% filter(Group %in% c('UM', 'TZ') & !is.na(Phylum)) %>%
 # Heat shock
 heat30 <- otu_cultivation %>%
   filter(treatment == 'Heat shock (30 min)') %>%
-  group_by(cultivation_day, cultivation_media, bile_acids, Phylum) %>%
+  group_by(#cultivation_day, cultivation_media, bile_acids, 
+    Phylum) %>%
   reframe(abund = sum(rel_abund)/n_distinct(Group))
 
 heat60 <- otu_cultivation %>%
   filter(treatment == 'Heat shock (60 min)') %>%
-  group_by(cultivation_day, cultivation_media, bile_acids, Phylum) %>%
+  group_by(#cultivation_day, cultivation_media, bile_acids, 
+    Phylum) %>%
   reframe(abund = sum(rel_abund)/n_distinct(Group))
 
 # Ethanol shock 
 et100 <- otu_cultivation %>%
   filter(treatment == 'Ethanol shock (100%)') %>%
-  group_by(cultivation_day, cultivation_media, bile_acids, Phylum) %>%
+  group_by(#cultivation_day, cultivation_media, bile_acids, 
+    Phylum) %>%
   reframe(abund = sum(rel_abund)/n_distinct(Group))
 
 et70 <- otu_cultivation %>%
   filter(treatment == 'Ethanol shock (70%)') %>%
-  group_by(cultivation_day, cultivation_media, bile_acids, Phylum) %>%
+  group_by(#cultivation_day, cultivation_media, bile_acids, 
+    Phylum) %>%
   reframe(abund = sum(rel_abund)/n_distinct(Group))
 
 heat30
@@ -551,6 +576,21 @@ otu_ema2 %>%
   labs(y = 'Relative abundance [log10]', x = '', fill = '', color = '') +
   theme(legend.position = 'bottom')
 ggsave('out/etoh_h_comparison/rel_abundEMA.png')
+
+# PA plot 
+otu_ema2 %>% 
+  mutate(shock = ifelse(shock == 'Ethanol_shock', 'Ethanol shock (70%)', 
+                        ifelse(shock == 'Heat_shock', 'Heat shock (30 min)', 'Non-treated stool'))) %>% 
+  group_by(treatmentEMA, shock, Phylum, Group) %>%  
+  reframe(sumPA = sum(PA)) %>% 
+  ggplot(aes(x = treatmentEMA, y = sumPA, fill = shock)) +
+  #geom_point(size = 4) +
+  geom_boxplot() +
+  facet_wrap(~ Phylum, scales = 'free_y', ncol =2) +
+  labs(y = '# OTUs', x = '', fill = '', color = '') +
+  theme(legend.position = 'bottom')
+ggsave('out/etoh_h_comparison/number_otus_EMA.png')
+ggsave('out/etoh_h_comparison/number_otus_EMA.svg')
 
 # Beta diversity (to check how is the reproducibility of treatment)
 ema_bray <- filter(nmds_positions, !is.na(treatmentEMA))
