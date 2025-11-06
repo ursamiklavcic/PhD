@@ -8,9 +8,10 @@ library(stringr)
 library(tibble)
 library(purrr)
 library(ggpubr)
+library(vegan)
 
 set.seed(96)
-theme_set(theme_bw())
+theme_set(theme_bw(base_size = 15))
 
 col <- c('#3CB371', '#f0a336')
 col2 <- c('#A7E2C1', '#F7CD92')
@@ -26,7 +27,7 @@ sporulation_ability <- read.table('data/sporulation_ability/sporulation_ability2
 etoh_species <- read.table('data/longitudinal_shotgun/ethanol_resistant_SGB.tsv', sep = '\t', header = T)
 
 metadata <- read.table('../longitudinal_shotgun/data/metadata.csv', sep = ';', header = TRUE) %>%  
-  mutate(date = dmy(date))
+  mutate(date = lubridate::dmy(date))
 
 
 abund <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', comment = '#') %>%
@@ -54,8 +55,34 @@ abund2 <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_tab
   filter(name != 'MC013') %>% 
   left_join(metadata, by = join_by('name' == 'Group')) 
 
+
+# What percentage of bacteria in the human gut can sporulate 
+pre_abund <- abund2 %>% left_join(etoh_species, by = 'Species', relationship = 'many-to-many') %>% distinct()
+
+pre_abund %>% 
+  ggplot(aes(x = sporulation_ability, y = value)) +
+  geom_boxplot() +
+  scale_y_log10() +
+  labs(x = '', y = 'Relative abundance [%]')
+ggsave('out/sporulation/rel_abund_sporulation.png', dpi = 600)
+
+# number of species 
+pre_abund %>% 
+  mutate(PA = ifelse(value > 0, 1, 0)) %>% 
+  filter(PA == 1) %>% 
+  group_by(sporulation_ability) %>% 
+  reframe(PA = n_distinct(Species)) 
+
+# Non-spore-former      292
+# Spore-former          235
+# NA                    506
+
 abund3 <- filter(abund2, !is.na(sporulation_ability), Domain == 'Bacteria', biota == 'bulk microbiota') %>% 
-  left_join(etoh_species, by = 'Species', relationship = 'many-to-many')
+  left_join(etoh_species, by = 'Species', relationship = 'many-to-many') %>% 
+  mutate(is_etoh_resistant = dplyr::if_else(is_etoh_resistant == TRUE, 'Ethanol-resistant', 'Non-ethanol resistant', missing = 'Non-ethanol resistant')) %>%  
+  distinct()
+
+unique(abund3$is_etoh_resistant)
 
 # relative abudnance of spore/ non-spore forming 
 rel <- abund3 %>% 
@@ -64,9 +91,37 @@ rel <- abund3 %>%
   scale_x_log10() +
   scale_fill_manual(values = col) +
   labs(x = 'Relative abundance [log10]', y = '', fill = '') +
-  theme(legend.position = 'bottom') +
-  stat_compare_means()
+  theme(legend.position = 'bottom')
+rel
 ggsave('out/sporulation/SNS_rel_abund.png')
+
+abund4 <- abund3 %>%
+  mutate(spore_etoh = case_when(
+    sporulation_ability == 'Spore-former' & is_etoh_resistant ==  'Ethanol-resistant'  ~ 'Ethanol-resistant spore-former',
+    sporulation_ability == 'Spore-former' & is_etoh_resistant == 'Non-ethanol resistant'  ~ 'Non-ethanol resistant spore-former',
+    sporulation_ability == 'Non-spore-former' & is_etoh_resistant ==  'Ethanol-resistant' ~ 'Ethanol resistant non-sporeforming bacteria',
+    TRUE ~ 'Non-ethanol resistant non-spore forming bacteria'))
+
+unique(abund4$spore_etoh)
+
+abund4 %>%
+  ggplot(aes(x = value, y = Phylum, fill = spore_etoh)) +
+  geom_boxplot() +
+  scale_x_log10() +
+  #scale_fill_manual(values = col) +
+  labs(x = 'Relative abundance [log10]', y = '', fill = '') +
+  theme(legend.position = 'bottom') +
+  guides(fill = guide_legend(nrow = 2))
+  
+abund3 %>% 
+  ggplot(aes(x = value, y = Phylum, fill = sporulation_ability)) +
+  geom_boxplot() +
+  scale_x_log10() +
+  scale_fill_manual(values = col) +
+  labs(x = 'Relative abundance [log10]', y = '', fill = '') +
+  facet_wrap(~is_etoh_resistant, scales = 'free') +
+  theme(legend.position = 'bottom') 
+ggsave('out/sporulation/rel_etoh_sporulation_Phylum.png', dpi = 600)
 
 abund3 %>% 
   ggplot(aes(x = value, y = Phylum, fill = is_etoh_resistant)) +
@@ -102,6 +157,7 @@ no <- abund3 %>%
   scale_fill_manual(values = col) +
   labs(x = '# Species', y = '', fill = '') +
   theme(legend.position = 'bottom')
+no
 ggsave('out/sporulation/SNS_N_species.png')
 
 # density rel abund 
@@ -114,12 +170,16 @@ bacillota %>%
 ggsave('out/sporulation/SNS_density_relabund_bacillota.png')
 
 
+ggarrange(no + labs(tag = 'A'), 
+          rel + labs(tag = 'B') + theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()), 
+          common.legend = T, legend = 'bottom', widths = c(1, .6))
+ggsave('out/sporulation/number_species_rel_abund.png', dpi = 600)
+
 # Prevalence 
 preval3 <- abund3 %>% 
   group_by(sporulation_ability, person, Phylum, Species) %>% 
   reframe(all_timepoints = n(), 
           timepoints_present = sum(value > 0),
-          timepoints_missing = sum(value = 0),
           prevalence = (timepoints_present / all_timepoints) * 100) %>%
   # Calculate number of OTUs per person x treatment x Phylum
   filter(prevalence > 0) %>% 
@@ -129,7 +189,7 @@ preval3 <- abund3 %>%
   group_by(person, sporulation_ability, Phylum, prevalence) %>%
   reframe(n_species_person_spore_phylum = n_distinct(Species), 
           per_species = (n_species_person_spore_phylum / all_species_per_person) * 100) %>% 
-  dsitinct() 
+  distinct() 
 
 # Statistics for prevalence ? 
 wt <- abund3 %>% 
@@ -160,7 +220,7 @@ group_by(wt, person) %>%
 # 8 H          1.07e-31
 # 9 I          1.07e-31
 
-preval_plot <-preval3 %>% 
+preval_plot <- preval3 %>% 
   filter(Phylum == 'Bacillota') %>% 
   ggplot(aes(x = prevalence, y = per_species, color = person)) +
   geom_line(linewidth = 2) +
@@ -168,34 +228,55 @@ preval_plot <-preval3 %>%
   #annotate("text", x = 50, y = 10, label = paste0('Wilcox test; p < ', scales::scientific(wt_results$p.value, digits = 3)), color = 'black') +
   facet_wrap(~sporulation_ability, nrow = 1, scales = 'free_y') +
   #scale_color_manual(values = col2) +
-  labs(x = 'Prevalence [days present within person]', y = expression(paste(italic("Bacillota"), " species [% of species at this prevalence]")), color = '') +
-  theme(legend.position = 'bottom', guide_legend(nrow = 1))
+  labs(x = 'Prevalence [% days present within person]', y = expression(paste(italic("Bacillota"), " species [% of species at this prevalence]")), color = '') +
+  theme(legend.position = 'bottom') +
+  guides(color = guide_legend(nrow = 1))
+preval_plot
 ggsave('out/sporulation/SNS_prevalence_person_Bacillota.png')
 
-rel_no <- ggarrange(no, rel + theme(axis.text.y = element_blank()), common.legend = T, 
-                    legend = 'bottom', widths = c(1, 0.7))
-ggarrange(rel_no + labs(tag = 'A'), preval_plot + labs(tag = 'B'), 
-          nrow = 2, common.legend = F)
-ggsave('out/sporulation/number_rel_prevalence.png')
+preval3 %>% 
+  filter(Phylum == 'Bacillota') %>%
+  ggplot(aes(x = prevalence, y = n_species_person_spore_phylum, color = person)) +
+  geom_point(size = 3) +
+  #annotate("text", x = 50, y = 10, label = paste0('Wilcox test; p < ', scales::scientific(wt_results$p.value, digits = 3)), color = 'black') +
+  facet_wrap(~sporulation_ability, nrow = 1, scales = 'free_y') +
+  #scale_color_manual(values = col2) +
+  labs(x = 'Prevalence [% days present within person]', y = expression(paste('#', italic("Bacillota"), " species")), color = '') +
+  theme(legend.position = 'bottom') +
+  guides(color = guide_legend(nrow = 1))
+ggsave('out/sporulation/SNS_prevalence_number_Bacillota.png')
 
+preval3 %>% 
+  ggplot(aes(x = prevalence, y = n_species_person_spore_phylum, color = person)) +
+  geom_point(size = 3) +
+  #annotate("text", x = 50, y = 10, label = paste0('Wilcox test; p < ', scales::scientific(wt_results$p.value, digits = 3)), color = 'black') +
+  facet_wrap(~sporulation_ability, nrow = 1, scales = 'free_y') +
+  #scale_color_manual(values = col2) +
+  labs(x = 'Prevalence [% days present within person]', y = "# species", color = '') +
+  theme(legend.position = 'bottom') +
+  guides(color = guide_legend(nrow = 1))
+ggsave('out/sporulation/SNS_n_species_prevalence_person.png')
+
+###
 # Alpha diveristy 
-bacillota <- mutate(bacillota, name = paste0(ifelse(sporulation_ability == 'Spore-former', 'S_', 'NS_'),name))
+#bacillota <- filter(abund3, Phylum == 'Bacillota')
+bacillota <- mutate(abund3, name = paste0(ifelse(sporulation_ability == 'Spore-former', 'S_', 'NS_'),name))
 
-# Alpha diversity 
-library(vegan)
 n <- filter(bacillota, value > 0) %>% 
   group_by(name) %>% 
   reframe(richness = n_distinct(Species)) 
 
 tab <- bacillota %>% 
-  select(Species, name, value) %>%
+  group_by(Species, name) %>%  
+  reframe(value = mean(value)) %>% 
   pivot_wider(names_from = 'name', values_from = 'value', values_fill = 0) %>% 
   column_to_rownames('Species') %>% 
   t()
+
 shannon = diversity(tab, index = 'shannon')
 
 alpha <- left_join(n, as_tibble(as.list(shannon)) %>% 
-                     pivot_longer(names_to = 'name', values_to = 'shannon', cols = starts_with(c('NS', 'S'))), 
+                     pivot_longer(names_to = 'name', values_to = 'shannon', cols = starts_with(c('NS_', 'S_'))), 
                    by = 'name') %>%
   left_join(bacillota, by = 'name') %>% 
   mutate(person2 = person) 
@@ -203,7 +284,7 @@ alpha <- left_join(n, as_tibble(as.list(shannon)) %>%
 event_data <- read.table('data/extreme_event_data.csv', sep = ',', header = TRUE)
 
 # richness
-ggplot(alpha, aes(x=day, y=richness)) +
+ggplot(alpha, aes(x = day, y = richness)) +
   geom_rect(data = event_data, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = extremevent_type), inherit.aes = FALSE,
             alpha = 0.6) +
   scale_fill_manual(values = c('white','#d94343', '#d98e43', '#f1f011', '#0c9910', '#3472b7', '#7934b7', '#b73485', '#0f5618')) +
@@ -217,7 +298,7 @@ ggplot(alpha, aes(x=day, y=richness)) +
             color=cole, linewidth=1.2) +
   facet_wrap(~person, scales = 'free') +
   labs(x='Day', y= 'Richness', fill = 'Event')
-ggsave('out/sporulation/SNS_richness.png')
+ggsave('out/sporulation/SNS_richness_all.png')
 
 ggplot(alpha, aes(x=day, y=shannon)) +
   geom_rect(data = event_data, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = extremevent_type), inherit.aes = FALSE,
@@ -233,10 +314,9 @@ ggplot(alpha, aes(x=day, y=shannon)) +
             color=cole, linewidth=1.2) +
   facet_wrap(~person, scales = 'free') +
   labs(x='Day', y= 'Shannon', fill = 'Event')
-ggsave('out/sporulation/SNS_shannon.png')
+ggsave('out/sporulation/SNS_shannon_all.png')
 
 # Beta diversity & density of clustering
-
 dist <- vegdist(tab, method = 'bray')
 mds <- metaMDS(dist)
 
@@ -247,9 +327,8 @@ mds_data <- as.data.frame(mds$points) %>%
   left_join(metadata, by = join_by('name_old' == 'Group')) %>% 
   mutate(spore_ability = substr(name, 1, 2))
 
-
-ggplot(mds_data, aes(x = MDS1, y = MDS2, color = person, shape = biota)) +
-  geom_point()
+ggplot(mds_data, aes(x = MDS1, y = MDS2, color = person, shape = spore_ability)) +
+  geom_point(size = 3)
 
 # 
 dist_bray <- as.matrix(dist) %>%
@@ -283,7 +362,7 @@ bray %>%
   facet_wrap(~same_person) +
   labs(x = 'Community', y = 'Median Bray-Curtis dissimilarity') +
   theme(legend.position = 'none')
-ggsave('out/sporulation/SNS_bray_curtis_boxplot.png')
+ggsave('out/sporulation/SNS_bray_curtis_boxplot_all.png')
 
 # in time 
 time_bray <-  as.matrix(dist) %>%
@@ -317,5 +396,45 @@ time_bray %>%
   theme(legend.position = 'bottom') +
   guides(fill = guide_legend(ncol = 2)) +
   scale_color_manual(values = col2) 
-ggsave('out/sporulation/SNS_time_braycurtis.png')
+ggsave('out/sporulation/SNS_time_braycurtis_all.png')
+
+# Sharing species between individuals 
+# not by Phylum 
+n_species <- bacillota %>% 
+  mutate(PA = ifelse(value > 0, 1, 0)) %>% 
+  group_by(sporulation_ability, person, Species) %>%
+  reframe(present = sum(PA == 1)) %>%  
+  filter(present > 12) %>% 
+  group_by(sporulation_ability) %>% 
+  reframe(n = n_distinct(Species))
+
+n_species_people <- bacillota %>% 
+  mutate(PA = ifelse(value > 0, 1, 0)) %>% 
+  group_by(sporulation_ability, person, Species) %>%
+  reframe(present = sum(PA == 1)) %>%  
+  filter(present > 12) %>% 
+  mutate(present = ifelse(present > 0, 1, 0)) %>% 
+  select(Species, person, present, sporulation_ability) %>% 
+  pivot_wider(names_from = 'person', values_from = 'present', values_fill = 0) %>%  
+  mutate(n_people = A+B+C+D+E+F+G+H+I, 
+         n_people = ifelse(n_people == 1, 'Present in 1 individual', 'Present > 1 individual')) %>% 
+  group_by(sporulation_ability, n_people) %>% 
+  reframe(n_species = n_distinct(Species)) %>% 
+  left_join(n_species, by = 'sporulation_ability') %>% 
+  mutate(per_species = (n_species/n)*100) 
+
+n_species_people %>% 
+  #mutate(n_people = factor(n_people, levels = c('Present in 1 individual', 'Present > 1 individual'))) %>% 
+  ggplot(aes(y = sporulation_ability, x = per_species, fill = n_people))+
+  geom_col() +
+  scale_fill_manual(values = c('#F2933F', '#3F9EF2')) +
+  labs(y = '', x = 'OTUs [%]', fill = '') +
+  theme(legend.position = 'bottom') +
+  guides(fill=guide_legend(nrow=1,byrow=TRUE))
+ggsave('out/sporulation/present_one_more_people.png', dpi = 600)
+
+
+##
+##
+# Ethanol resistant and spore-forming = active spore-formers who are they? 
 
