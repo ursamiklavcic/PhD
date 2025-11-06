@@ -10,10 +10,11 @@ library(scales)
 set.seed(96)
 theme_set(theme_bw())
 
-otutab <- readRDS('longitudinal_amplicons/data/otutab_ethanol_bulk.RDS')
-taxtab <- readRDS('longitudinal_amplicons/data/taxtab.RDS')
-metadata <- readRDS('longitudinal_amplicons/data/metadata.RDS')
-norm_rel <- readRDS('longitudinal_amplicons/data/otutab_normrel.RDS') %>%
+otutab <- readRDS('data/longitudinal_amplicons/otutab_ethanol_bulk.RDS')
+taxtab <- readRDS('data/longitudinal_amplicons/taxtab.RDS')
+metadata <- readRDS('data/longitudinal_amplicons/metadata.RDS')
+
+norm_rel <- readRDS('data/longitudinal_amplicons/otutab_normrel.RDS') %>%  
   left_join(select(metadata, Group, original_sample), by = 'Group')
 
 col_phylum = c('#1F77B4', '#FF7F0E',  '#2CA02C',  '#D62728', '#9467BD', '#8C564B', '#f4d03f')
@@ -22,7 +23,7 @@ colm = c('#27ae60')
 colme = c('#27ae60', '#d87328' )
 
 # efficiency of ethanol treatment on stool samples in this study
-norm_rel2 <- filter(norm_rel, substr(Group, 1, 1) == 'M') %>%
+norm_rel2 <- filter(norm_rel, substr(Group, 1, 1) == 'M') %>%  
   left_join(filter(norm_rel, substr(Group, 1, 1) == 'S'), by = c('name', 'original_sample')) %>%
   left_join(taxtab, by = 'name')
 

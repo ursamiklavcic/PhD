@@ -76,20 +76,21 @@ n_otus_people <- long %>% mutate(time_point = as.integer(substr(Group, 3, 5))) %
   select(name, person, present, is_ethanol_resistant) %>% 
   pivot_wider(names_from = 'person', values_from = 'present', values_fill = 0) %>%  
   mutate(n_people = A+B+C+D+E+F+G+H+I, 
-         n_people = ifelse(n_people == 1, 'Present in a individual', 'Present in more than one individual')) %>% 
+         n_people = ifelse(n_people == 1, 'Present in 1 individual', 'Present > 1 individual')) %>% 
   group_by(is_ethanol_resistant, n_people) %>% 
   reframe(n_otu = n_distinct(name)) %>% 
   left_join(n_otus, by = 'is_ethanol_resistant') %>% 
   mutate(per_otu = (n_otu/n)*100) 
 
 n_otus_people %>% 
-  ggplot(aes(x = is_ethanol_resistant, y = per_otu, fill = n_people))+
+  #mutate(n_people = factor(n_people, levels = c('Present in 1 individual', 'Present > 1 individual'))) %>% 
+  ggplot(aes(y = is_ethanol_resistant, x = per_otu, fill = n_people))+
   geom_col() +
   scale_fill_manual(values = c('#F2933F', '#3F9EF2')) +
-  labs(x = '', y = 'OTUs [%]', fill = '') +
+  labs(y = '', x = 'OTUs [%]', fill = '') +
   theme(legend.position = 'bottom') +
-  guides(fill=guide_legend(nrow=2,byrow=TRUE))
-ggsave('out/longitudinal_amplicons/present_one_more_people.png')
+  guides(fill=guide_legend(nrow=1,byrow=TRUE))
+ggsave('out/longitudinal_amplicons/present_one_more_people.png', dpi = 600)
 
   
 
