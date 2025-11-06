@@ -37,16 +37,16 @@ virus2 <- virus %>%
 
 filter(virus2, biota == 'bulk microbiota') %>% 
   ggplot(aes(x = day, y = sum)) +
-  geom_rect(data = event_data, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = extremevent_type), inherit.aes = FALSE,
+  geom_rect(data = event_data, aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = Inf, fill = extremevent_type), inherit.aes = FALSE,
             alpha = 0.6) +
   scale_fill_manual(values = c('white','#d94343', '#d98e43', '#f1f011', '#0c9910', '#3472b7', '#7934b7', '#b73485', '#0f5618')) +
   #geom_col() +
   geom_point(aes(color = Class), size =2) +
   geom_line(aes(color = Class), linewidth=1.5) +
-  #scale_y_log10() +
+  scale_y_log10() +
   facet_wrap(~person, scales = 'free', nrow = 3) +
-  labs(x = 'Day', y = '# reads per million')
-ggsave('out/geNomad/sumTPM_viruses_bulk.png')
+  labs(x = 'Day', y = '# reads per million [log10]', fill = 'Pre-defined event')
+ggsave('out/geNomad/sumTPM_viruses_bulk.png', dpi = 600)
 
 virus3 <- virus %>% 
   filter(TPM > 0, !is.na(Class), Class != '', Class != 'Caudoviricetes') %>% 

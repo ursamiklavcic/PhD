@@ -73,7 +73,7 @@ domain %>%
   ggplot(aes(x = biota, y = rel_abund, fill = Domain)) +
   geom_col() +
   labs(x = '', y = 'Relative abundance [%]')
-ggsave('longitudinal_shotgun/plots/mpa_rel_abund_kingdom.png')    
+ggsave('out/metaphlan/mpa_rel_abund_kingdom.png')    
 
 # Archea
 archaea <- filter(abund, Domain == 'Archaea', !is.na(Species), !is.na(SGB)) %>% 
@@ -88,17 +88,19 @@ ag <- archaea %>%
   labs(x ='Individual', y = 'Mean relative abundance across samples of a person [%]') +
   theme(legend.position = 'bottom')
 ag
+ggsave('out/metaphlan/archaea_mean_rel_across.png', dpi = 600)
 
 as <- archaea %>% 
   filter(value > 0) %>%  
   ggplot(aes(x = as.factor(day), y = value, fill = Species)) +
   geom_col(position = 'dodge') +
   scale_fill_manual(values = c('#27CFF5', '#671BA6')) +
-  facet_wrap(~person, scales = 'free', nrow = 5) +
+  facet_wrap(~person, scales = 'free', nrow = 3) +
   labs(x = 'Day', y = 'Relative abundance [%]') +
   theme(legend.position = 'bottom') 
 as
-ggsave('longitudinal_shotgun/plots/archaea_species.png')
+ggsave('out/metaphlan/archaea_species.png', dpi=600)
+ggsave('out/metaphlan/archaea_species.svg')
 
 ggarrange(ag + labs(tag = 'A'), as + labs(tag = 'B'), 
           widths = c(0.6, 1))
@@ -113,7 +115,7 @@ archaea %>%
   labs(x = 'Day', y = 'Relative abundance [%]', color = 'Species \n&\nSGB') +
   theme(legend.position = 'bottom') +
   guides(color = guide_legend(nrow = 3, byrow = TRUE))
-ggsave('longitudinal_shotgun/plots/archaea_SGB.png')
+ggsave('out/metaphlan/archaea_SGB.png')
 
 # Eukaryota
 eukaryota <- filter(abund, Domain == 'Eukaryota', !is.na(Species), !is.na(SGB)) %>% 
@@ -125,11 +127,12 @@ filter(eukaryota, value > 0) %>%
   ggplot(aes(x = day, y = value, color = species_SGB)) +
   geom_point(size = 2) +
   geom_line(linewidth = 1.5) +
-  facet_wrap(~person, scales = 'free', nrow = 5) +
+  facet_wrap(~person, scales = 'free', nrow = 3) +
   labs(x = 'Day', y = 'Relative abundance [%]', color = 'Species \n&\nSGB') +
   theme(legend.position = 'bottom') +
   guides(color = guide_legend(nrow = 2, byrow = TRUE))
-ggsave('longitudinal_shotgun/plots/eukaryota_SGB.png')
+ggsave('out/metaphlan/eukaryota_SGB.png', dpi = 600)
+ggsave('out/metaphlan/eukaryota_SGB.svg')
 
 # Bacteria 
 # Phylum level 
@@ -144,7 +147,7 @@ phylum %>%
   ggplot(aes(x = biota, y = rel_abund, fill = Phylum)) +
   geom_col() +
   labs(x = '', y = 'Relative abundance [%]')
-ggsave('longitudinal_shotgun/plots/mpa_rel_abund_phylum.png') 
+ggsave('out/metaphlan/mpa_rel_abund_phylum.png', dpi = 600) 
 
 # how many species did we recover in each phylum 
 bacteria <- filter(abund, Domain == 'Bacteria', !is.na(Phylum), !is.na(Class), 
@@ -160,7 +163,7 @@ bacteria %>%
   scale_fill_manual(values = col) +
   labs(x = 'Relative abundance [log10]', y = '', fill = '') +
   theme(legend.position = 'bottom')
-ggsave('longitudinal_shotgun/plots/rel_abund_phylum_boxplot.png')
+ggsave('out/metaphlan/rel_abund_phylum_boxplot.png')
 
 # For together
 rel <- bacteria %>%
@@ -183,7 +186,8 @@ no <- bacteria %>%
   scale_fill_manual(values = col) +
   labs(x = '# Species', y = '', fill = '') +
   theme(legend.position = 'bottom')
-ggsave('longitudinal_shotgun/plots/n_species_phylum.png')
+no
+ggsave('out/metaphlan/n_species_phylum.png')
 
 # both 
 ggarrange(no + labs(tag = 'A'), rel + labs(tag = 'B'), 
@@ -237,7 +241,7 @@ ggplot(alpha, aes(x=day, y=richness)) +
             color=cole, linewidth=1.2) +
   facet_wrap(~person, scales = 'free') +
   labs(x='Day', y= 'Richness', fill = 'Event')
-ggsave('longitudinal_shotgun/plots/mpa_richness.png')
+ggsave('out/metaphlan/mpa_richness.png')
 
 # Shannon 
 ggplot(alpha, aes(x=day, y=shannon)) +
@@ -254,7 +258,7 @@ ggplot(alpha, aes(x=day, y=shannon)) +
             color=cole, linewidth=1.2) +
   facet_wrap(~person, scales = 'free') +
   labs(x='Day', y= 'Shannon', fill = 'Event')
-ggsave('longitudinal_shotgun/plots/mpa_shannon.png')
+ggsave('out/metaphlan/mpa_shannon.png')
 
 # Composition
 bacteria %>% 
@@ -263,7 +267,7 @@ bacteria %>%
   geom_col() +
   facet_wrap(~person, scales = 'free_x') +
   labs(x = 'Day', y = 'Relative abundance [%]')
-ggsave('longitudinal_shotgun/plots/mpa_rel_abund_bact.png')
+ggsave('out/metaphlan/mpa_rel_abund_bact.png')
 
 bacteria %>% 
   filter(biota == 'ethanol treated sample') %>%
@@ -271,7 +275,7 @@ bacteria %>%
   geom_col() +
   facet_wrap(~person, scales = 'free_x') +
   labs(x = 'Day', y = 'Relative abundance [%]')
-ggsave('longitudinal_shotgun/plots/mpa_rel_abund_bact_etoh.png')
+ggsave('out/metaphlan/mpa_rel_abund_bact_etoh.png')
 
 
 # Beta diveristy 
