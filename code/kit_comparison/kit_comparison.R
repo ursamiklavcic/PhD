@@ -12,7 +12,7 @@ library(scales)
 library(ggpubr)
 
 set.seed(96)
-theme_set(theme_bw())
+theme_set(theme_bw(base_size=14))
 
 
 # Exploration
@@ -114,8 +114,8 @@ otutab_pre = shared_pre %>%
 
 # Rarefy the data once - as we sequenced so deep that for the first analysis this is not crucial !
 otutab = rrarefy(otutab_pre, sample=reads_per_sample)
-saveRDS(otutab, 'kit_comparison/data/r_data/otutab.RDS')
-
+saveRDS(otutab, 'data/kit_comparison/r_data/otutab.RDS')
+otutab <- readRDS('data/kit_comparison/r_data/otutab.RDS')
 # Extract OTUs that are present rarefied table 
 otu_names = as.data.frame(otutab) %>% colnames() 
 
@@ -144,6 +144,7 @@ rm(shared)
 
 # DNA concentrations 
 col_kit = c("#D22B2B", "#2E9FDF", "#E7B800", '#27ae60')
+col_human =c('#9C1995', '#129921', '#2BB5B5')
 
 conc = as_tibble(read.csv('data/kit_comparison/concentration.csv', sep=',')) %>%
   filter(Organism != 'Negative control') %>%
@@ -225,12 +226,13 @@ observed_plot
 alpha_shannon <- pairwise.t.test(alpha_meta$shannon, alpha_meta$kit, paired = FALSE, p.adjust.method = 'BH')
 p_shannon <- pairwise.t.test(conc$Concentration, conc$Protocol, paired = TRUE, p.adjust.method = 'BH') 
 
-shannon <- ggplot(alpha_meta, mapping = aes(x=kit, y=shannon, color=individual)) + 
-  geom_point(size = 3) + 
+shannon <- ggplot(alpha_meta, mapping = aes(x=kit, y=shannon)) + 
+  geom_point(aes(shape=individual, color = individual), size = 5) + 
   stat_compare_means(mapping = aes(label = after_stat(p.signif)), method = "t.test", paired=F,
                      comparisons=list(#c("NucleoSpin", "FastDNA"), c("NucleoSpin", "PowerFecal"), c("FastDNA", "PowerFecal"),
                                       c('FastDNA', 'Dneasy'), c('PowerFecal', 'Dneasy'), c('NucleoSpin', 'Dneasy'))) +
-  #scale_color_manual(values = col_kit) +
+  scale_color_manual(values = col_human, name = "Individual") +
+  scale_shape_manual(values = c(16, 17, 15), name = "Individual") +
   labs(x='', y="Shannon", color="") +
   theme(legend.position = 'bottom') 
 shannon
@@ -248,7 +250,7 @@ nmds_positions <-
 permanova <- adonis2(dist ~ kit, data = metadata, method = 'bray', permutations = 999)
 
 kits <- ggplot(nmds_positions, aes(x=NMDS1, y=NMDS2, color=kit, shape = individual)) +
-  geom_point(size=4) +
+  geom_point(size=5) +
   annotate('text', x = 0.5, y = 0.6, label = paste('PERMANOVA, p = 0.002')) +
   scale_color_manual(values = col_kit) +
   labs(x='', y='', color='Protocol', shape = 'Individual')
@@ -298,7 +300,7 @@ rel_plot <- rel_abund %>%
 ggarrange(conc_plot + labs(tag = 'A'), shannon + labs(tag = 'B'),  
           kits + labs(tag = 'C'), rel_plot + labs(tag = 'D'),
           nrow = 2, ncol = 2)
-ggsave('out/kit_comparison/01_kit_comparison.png', dpi = 600) 
+ggsave('out/kit_comparison/kit_comparison.png', dpi = 600) 
 
 
 
