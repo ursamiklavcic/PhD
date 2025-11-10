@@ -14,7 +14,7 @@ library(glue)
 library(ggpubr)
 
 set.seed(96)
-theme_set(theme_bw(base_size = 12))
+theme_set(theme_bw(base_size = 14))
 
 # Exploration
 shared = read.table('data/etoh_h_comparison/mothur/stability.trim.contigs.good.unique.good.filter.unique.precluster.denovo.vsearch.pick.opti_mcc.shared', 
@@ -105,7 +105,7 @@ otutab_pre = shared_pre %>%
 # Rarefy the data once - as we sequenced so deep that for the first analysis this is not crucial !
 otutab = rrarefy(otutab_pre, sample=reads_per_sample)
 saveRDS(otutab, 'etoh_t_comparison/data/r_data/otutab.RDS')
-
+otutab <- readRDS('data/etoh_h_comparison/r_data/otutab.RDS')
 # Extract OTUs that are present rarefied table 
 otu_names = as.data.frame(otutab) %>% colnames() 
 
@@ -526,48 +526,50 @@ metadata %>%
   filter(!(Group %in% c('UM', 'TZ'))) %>%  
   group_by(treatment) %>%  
   reframe(n = n_distinct(Group))
-#
-otu_ema <- filter(otu_long, !is.na(treatmentEMA)) %>%
-  select(Group, description, shock, treatmentEMA, aliquote, name, value, rel_abund, PA, Phylum, Class, Order, Family, Genus)
 
-unique(otu_ema$Group)
+
+###
+otu_ema <- filter(otu_long, description %in% c("wash&ethanol" , "wash&temperature", "EMA&temperature", "EMA&ethanol", "microbiota" )) %>%
+  select(Group, description, shock, treatmentEMA, aliquote, name, value, rel_abund, PA, Phylum, Class, Order, Family, Genus) %>%  
+  mutate(shock = case_when(shock == "Ethanol_shock" ~ 'Ethanol shock', 
+                           shock == 'Heat_shock' ~ 'Heat shock',
+                           TRUE ~ 'Non-treated'), 
+         treatmentEMA = case_when(treatmentEMA == 0 ~ 'Non-treated', 
+                                  is.na(treatmentEMA) ~ 'Only water', 
+                                  treatmentEMA == 5 ~ '5 min', 
+                                  treatmentEMA == 10 ~ '10 min',
+                                  treatmentEMA == 15 ~ '15 min', 
+                                  TRUE ~ NA))
+unique(otu_ema$shock)
+unique(otu_ema$treatmentEMA)
 
 # relative abundance plot 
 otu_ema_rel <- filter(otu_ema, shock == 'Non-treated') %>%  
-  group_by(name, Phylum, Class, Order, Family, Genus) %>%  
+  group_by(name) %>%  
   reframe(rel_abund = mean(rel_abund)) %>%
-  full_join(filter(otu_ema, shock != 'Non-treated'), by = c('name', 'Phylum', 'Class', 'Order', 'Family', 'Genus'), relationship = "many-to-many") %>%
-  mutate(shock = case_when(shock == 'Ethanol_shock' ~ 'Ethanol shock', 
-                           shock == 'Heat_shock' ~ 'Heat shock', 
-                           shock == 'Only-water' ~ 'Only water'))
+  full_join(filter(otu_ema, shock != 'Non-treated'), by = 'name', relationship = "many-to-many") 
 
-otu_ema_rel %>%
+otu_ema_rel2 <- otu_ema_rel %>%
   filter(rel_abund.x != 0 & rel_abund.y != 0) %>%
   mutate(ratio = rel_abund.y/rel_abund.x) %>%
   group_by(Phylum, shock, treatmentEMA) %>%
-  reframe(mean_ratio = mean(ratio)) %>%
-  ggplot(aes(x = mean_ratio, y = Phylum, color = as.factor(treatmentEMA))) +
-  #geom_boxplot() +
+  reframe(mean_ratio = mean(ratio)) 
+
+otu_ema_rel2 %>%
+  ggplot(aes(x = mean_ratio, y = Phylum)) +
   scale_x_log10() +
-  geom_jitter(size = 4, width = .2) +
+  geom_jitter(size = 4, width = .2, aes(color = treatmentEMA, shape = shock)) +
   geom_vline(xintercept = 1) +
+  scale_color_manual(values = c('blue', 'red', 'yellow', 'green', 'grey'), name = "Color based on EMA treatment,\n shape based on timming of EMA treatement") +
+  scale_shape_manual(values = c(16, 17, 15), name = "Color based on EMA treatment,\n shape based on timming of EMA treatement") +
   facet_grid(~ shock) +
   labs(x = expression(frac('Relative abundance [treated]', 'Relative abundance [stool]')), y = '', color = 'Illumination time \n for EMA treatment')
 ggsave('out/etoh_h_comparison/efficiency_EMA_treatment_class.png', dpi=600)
 
-otu_ema2 <- otu_ema %>% 
-  mutate(treatmentEMA = case_when(treatmentEMA == '5' ~'5 min', 
-                                  treatmentEMA == '10' ~'10 min', 
-                                  treatmentEMA == '15' ~'15 min'), 
-         treatmentEMA = ifelse(shock == 'Only-water', 'Only water', 
-                               ifelse(shock == 'Non-treated', 'Non-treated', treatmentEMA))) 
-otu_ema2$treatmentEMA <- factor(otu_ema2$treatmentEMA, 
-                                levels = c('Non-treated', 'Only water', '5 min', 
-                                            '10 min', '15 min'))
 
-otu_ema2 %>% 
-  mutate(shock = ifelse(shock == 'Ethanol_shock', 'Ethanol shock (70%)', 
-                        ifelse(shock == 'Heat_shock', 'Heat shock (30 min)', 'Non-treated stool'))) %>% 
+otu_ema$treatmentEMA <- factor(otu_ema$treatmentEMA, levels = c('Non-treated', 'Only water', '5 min', '10 min', '15 min'))
+
+otu_ema %>% 
   filter(Phylum != 'Other') %>% 
   ggplot(aes(x = treatmentEMA, y = rel_abund, fill = shock)) +
   geom_boxplot() +
@@ -578,15 +580,14 @@ otu_ema2 %>%
 ggsave('out/etoh_h_comparison/rel_abundEMA.png')
 
 # PA plot 
-otu_ema2 %>% 
-  mutate(shock = ifelse(shock == 'Ethanol_shock', 'Ethanol shock (70%)', 
-                        ifelse(shock == 'Heat_shock', 'Heat shock (30 min)', 'Non-treated stool'))) %>% 
+otu_ema %>% 
   group_by(treatmentEMA, shock, Phylum, Group) %>%  
   reframe(sumPA = sum(PA)) %>% 
+  filter(!Phylum %in% c('Other', 'Verrucomicrobiota')) %>% 
   ggplot(aes(x = treatmentEMA, y = sumPA, fill = shock)) +
   #geom_point(size = 4) +
   geom_boxplot() +
-  facet_wrap(~ Phylum, scales = 'free_y', ncol =2) +
+  facet_wrap(~ Phylum, scales = 'free_y', ncol = 2) +
   labs(y = '# OTUs', x = '', fill = '', color = '') +
   theme(legend.position = 'bottom')
 ggsave('out/etoh_h_comparison/number_otus_EMA.png')
