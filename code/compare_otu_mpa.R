@@ -55,55 +55,125 @@ abund <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_tabl
 bacteria <- filter(abund, Domain == 'Bacteria', !is.na(Phylum), !is.na(Class), 
                    !is.na(Order), !is.na(Family), !is.na(Genus), !is.na(Species), !is.na(SGB)) %>% 
   pivot_longer(-c(Domain, Phylum, Class, Order, Family, Genus, Species, SGB)) %>% 
-  mutate(PA = ifelse(value > 0, 1, 0), 
-         Group = name) %>% 
-  select(-name) %>%  
-  filter(value > 0)
-  
+  left_join(metadata, by = join_by('name' == 'Group')) %>% 
+  mutate(PA = ifelse(value > 0, 1, 0))
 
-species <- bacteria %>%  
-  group_by(Group) %>% 
+species <- bacteria %>%
+  filter(value > 0) %>% 
+  group_by(name) %>% 
   reframe(species = n_distinct(Species))
 
-genus_meta <-   bacteria %>%  
-  group_by(Group) %>% 
+genus_meta <- bacteria %>% 
+  filter(value > 0) %>% 
+  group_by(name) %>% 
   reframe(genus_meta = n_distinct(Genus))
 
 # Plot together
-all <- full_join(otus, species,by = 'Group' ) %>%  
-  full_join( genus_meta, by = 'Group') %>% 
+all <- full_join(otus, species,by = join_by('Group' == 'name')) %>%  
+  full_join(genus_meta, by = join_by('Group' == 'name')) %>% 
   full_join(genus_otu, by = 'Group') %>% 
-  left_join(metadata, by = 'Group')
+  left_join(metadata, by = 'Group') %>% 
+  filter(!is.na(biota))
 
 
 all %>% ggplot(aes(x = otus, y = species, color = biota)) +
-  geom_point() +
-  geom_smooth(method = 'lm') +
+  geom_point(size = 3) +
+  #geom_smooth(method = 'lm') +
   facet_wrap(~biota, scales = 'free') +
   scale_color_manual(values = c('#3CB371', '#f0a336')) +
-  stat_cor(method = "pearson", label.x = 250, label.y = 320) +
+  geom_abline() +
   labs(x = '# OTUs/sample ', y = '# species/sample', color = '') +
-  theme(legend.position = 'bottom')
+  theme(legend.position = 'none')
 ggsave('out/compare_otu_species.png') 
 
   
 all %>% ggplot(aes(x = otus, y = species, color = biota)) +
   geom_point() +
-  geom_smooth(method = 'lm') +
   facet_wrap(~biota, scales = 'free') +
   scale_color_manual(values = c('#3CB371', '#f0a336')) +
-  stat_cor(method = "pearson", label.x = 250, label.y = 320) +
+  geom_abline() +
   labs(x = '# OTUs/sample ', y = '# genera/sample',  color = '') +
-  theme(legend.position = 'bottom')
+  theme(legend.position = 'none')
 ggsave('out/compare_otu_genera.png')
 
 
 all %>% ggplot(aes(x = genus_otus, y = genus_meta, color = biota)) +
   geom_point() +
-  geom_smooth(method = 'lm') +
   scale_color_manual(values = c('#3CB371', '#f0a336')) +
   facet_wrap(~biota, scales = 'free') +
-  stat_cor(method = "pearson") +
+  geom_abline()+  
   labs(x = '# genera/sample in shotgun metagenomic data', y = '# genera/sample in amplicon data',  color = '') +
-  theme(legend.position = 'bottom')
+  theme(legend.position = 'none')
 ggsave('out/compare_genera.png')
+
+# Compare relative abundance 
+# col_phylum = c('#1F77B4', '#FF7F0E',  '#2CA02C',  '#D62728', '#9467BD', '#8C564B', '#f4d03f', 
+#                )
+# otu_rel <- otu_long %>% 
+#   left_join(metadata, by = 'Group') %>% 
+#   group_by(biota) %>% 
+#   mutate(rel_abund = value/sum(value)*100) %>% 
+#   ungroup() %>%
+#   group_by(biota, Phylum) %>% 
+#   reframe(rel_abund_otu = sum(rel_abund)) %>% 
+#   mutate(Phylum = case_when(
+#     Phylum == 'TM7' ~ 'Saccharibacteria', 
+#     Phylum == 'Tenericutes' ~ 'Mycoplasmatota', 
+#     Phylum == 'Lentisphaerae' ~ 'Lentisphaerota', 
+#     Phylum == 'Synergistetes' ~ 'Synergistota',
+#     Phylum == 'Deferribacteres' ~ 'Deferribacteraceae', 
+#     Phylum == 'Fusobacteria' ~ 'Fusobacterium',
+#     TRUE ~ Phylum))
+#  
+# unique(otu_rel$Phylum)
+# 
+# mpa_rel <- bacteria %>% 
+#   mutate(value = ifelse(is.na(value), 0, value)) %>% 
+#   group_by(biota, Phylum, Species) %>% 
+#   reframe(value = value/sum(value, na.rm = TRUE)) %>% 
+#   group_by(biota, Phylum) %>% 
+#   reframe(rel_abund_mpa = sum(value, na.rm = TRUE)) %>% 
+#   mutate(Phylum = case_when(
+#     Phylum == 'Actinobacteria' ~ 'Actinomycetota',
+#     Phylum == 'Candidatus_Saccharibacteria' ~ 'Saccharibacteria',
+#     Phylum == 'Chloroflexi' ~ 'Chloroflexota',
+#     Phylum == 'Proteobacteria' ~ 'Pseudomonadota',
+#     Phylum == 'Lentisphaerae' ~ 'Lentisphaerota', 
+#     Phylum == 'Fusobacteria' ~ 'Fusobacterium',
+#     Phylum == 'Verrucomicrobia' ~ 'Verrucomicrobiota', 
+#     Phylum == 'Bacteria_unclassified' ~ 'unclassified Bacteria',
+#     Phylum == 'Candidatus_Melainabacteria' ~ 'Cyanobacteria', 
+#     Phylum == 'Synergistetes' ~ 'Synergistota',
+#     Phylum == 'Tenericutes' ~ 'Mycoplasmatota', 
+#     TRUE ~ Phylum ))
+# 
+# unique(mpa_rel$Phylum)
+# 
+# rel <- full_join(mpa_rel, otu_rel, by = c('biota', 'Phylum')) %>% 
+#   pivot_longer(names_to = 'sample', values_to = 'rel_abund', cols = starts_with('rel_abund')) 
+# 
+# rel %>% 
+#   ggplot(aes(x = biota, y = rel_abund, fill = Phylum)) +
+#   geom_col() +
+#   facet_wrap(~sample)
+
+# Alpha diveristy 
+
+alpha_mpa <- readRDS('data/longitudinal_shotgun/alpha_diveristy.RDS') %>% select(name, richness, shannon)
+alpha_otu <- readRDS('data/longitudinal_amplicons/alpha.RDS')
+
+alpha <- full_join(alpha_otu, alpha_mpa, by = join_by('Group' == 'name'))
+
+alpha %>% filter(biota == 'Bulk microbiota') %>% 
+  pivot_longer(names_to = 'sample', values_to = 'shannon', cols = starts_with('shannon')) %>% 
+  ggplot(aes(x=day, y=shannon)) +
+  geom_line(data=alpha_meta %>% dplyr::select(-person) %>% filter(biota == 'Bulk microbiota'), 
+            aes(group=person2), color= colm, linewidth=0.5, alpha=0.5) +
+  geom_line(data=alpha_meta %>% dplyr::select(-person) %>% filter(biota == 'Ethanol treated sample'), 
+            aes(group=person2), color= cole, linewidth=0.5, alpha=0.5)+
+  geom_line(data=alpha_meta %>% filter(biota == 'Bulk microbiota'),
+            aes(color=person), color= colm, linewidth=1.2) +
+  geom_line(data=alpha_meta %>% filter(biota == 'Ethanol treated sample'), 
+            color=cole, linewidth=1.2) +
+  facet_wrap(~person, scales = 'free') +
+  labs(x='Day', y= '#OTUs', color = 'Sample'))
