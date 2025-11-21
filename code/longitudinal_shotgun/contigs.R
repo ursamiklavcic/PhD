@@ -4,9 +4,10 @@ library(tidyr)
 library(ggplot2)
 library(stringr)
 library(lubridate)
+library(ggpubr)
 
 set.seed(96)
-theme_set(theme_bw())
+theme_set(theme_bw(base_size = 15))
 
 # Metadata 
 metadata <- read.table('data/metadata.csv', header= TRUE, sep = ';') %>%
@@ -48,6 +49,64 @@ saveRDS(contigs, 'data/intermediate/contigs.RDS')
 
 contigs <- readRDS('~/projects/longitudinal_shotgun/data/intermediate/contigs.RDS')
 
+kingdom_contigs <- contigs %>% 
+  mutate(TPM = select(., `TPM MA001`:`TPM MI012`) %>% rowSums(na.rm = TRUE), x = 'X') %>%  
+  group_by(Kingdom, x) %>% 
+  reframe(TPM = sum(TPM)) %>%  
+  mutate(rel_abund = TPM/sum(TPM)*100, 
+         Kingdom = ifelse(is.na(Kingdom), 'UNCLASSIFIED', Kingdom))
+
+conitgs_domain <- kingdom_contigs %>% 
+  mutate(Kingdom = factor(Kingdom, levels = c('Archaea', 'Bacteria', 'Eukaryota', 'Viruses', 'UNCLASSIFIED')), 
+         x = 'DIAMOND + LCA') %>% 
+  ggplot(aes(x = x, y = rel_abund, fill = Kingdom)) +
+  geom_col() +
+  scale_fill_manual(values = c('#4E9E23', '#29BCE3', '#D13D21', '#FAE528', 'grey')) +
+  labs(x = '', y = 'Relative abundance [%]', fill = 'Domain')+
+  theme(axis.ticks.x = element_blank())
+
+
+
+abund <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', comment = '#') %>%
+  rename_with(~ str_remove(., '^profiled_'), starts_with('profiled_')) %>%
+  #mutate(clade_name = str_remove_all(clade_name, '[a-zA-Z]__')) %>%
+  separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species', 'SGB'),
+           sep="\\|") %>% 
+  mutate(Phylum = ifelse(Phylum == 'p__Firmicutes', 'p__Bacillota', Phylum), 
+         Domain = str_remove_all(Domain, 'k__'), 
+         Phylum = str_remove_all(Phylum, 'p__'), 
+         Class = str_remove_all(Class, 'c__'), 
+         Order = str_remove_all(Order, 'o__'), 
+         Family = str_remove_all(Family, 'f__'), 
+         Genus = str_remove_all(Genus, 'g__'), 
+         Species = str_remove_all(Species, 's__'), 
+         SGB = str_remove_all(SGB, 't__')) %>% 
+  select(-MC013)
+
+domain <- filter(abund, is.na(Phylum)) %>% 
+  select(-c(Phylum, Class, Order, Family, Genus, Species, SGB)) %>% 
+  pivot_longer(-Domain) %>%  
+  left_join(metadata, by = join_by('name' == 'Group')) %>% 
+  group_by(biota) %>% 
+  mutate(rel_abund = value /sum(value) * 100, 
+         x = 'MetaPhlAn') %>% 
+  filter(biota == 'bulk microbiota') %>%  
+  ggplot(aes(x = x, y = rel_abund, fill = Domain)) +
+  geom_col() +
+  scale_fill_manual(values = c('#4E9E23', '#29BCE3', '#D13D21','grey')) +
+  labs(x = '', y = 'Relative abundance [%]') +
+  theme(axis.ticks.x = element_blank())
+
+
+ggarrange(conitgs_domain + labs(tag = 'A'), 
+          domain + labs(tag = 'B'), 
+          common.legend = TRUE, 
+          legend = 'bottom')
+ggsave('out/DIAMOND_metaphlan.png', dpi=600)
+
+
+# 
+
 contigs %>%
   group_by(Kingdom) %>%
   summarise(no_contigs = n_distinct(contigID)) %>%
@@ -76,6 +135,20 @@ c_domain <- contigs_long %>%
   select(contigID, Kingdom, Clade, Phylum, Class, Order, Family, Genus, Species, person, biota, time_point, TPM) %>% 
   group_by(person, biota, time_point, Kingdom) %>%
   reframe(sum = sum(TPM)) 
+
+kingdom_contigs <- c_domain %>% 
+  ggplot(aes(x = biota, y = sum, fill = Kingdom)) +
+  geom_col() +
+  labs(x = '', y = 'TPM', color = 'Kingdom')
+
+# Metaphlan 
+
+
+
+
+
+
+
 
 c_domain %>%
   ggplot(aes(x = time_point, y = sum, fill = Kingdom)) +
