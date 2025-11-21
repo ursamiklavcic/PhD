@@ -421,14 +421,14 @@ saveRDS(otutabEM, 'thesis/data/otutab_ethanol_bulk.RDS')
 otu_names = as.data.frame(otutabEM) %>% colnames() 
 
 # Import taxonomy table
-taxtab = read_tsv('data/mothur/final.opti_mcc.0.03.cons.taxonomy') %>%
+taxtab = read_tsv('~/projects/longitudinal_amplicons/data/mothur/final.opti_mcc.0.03.cons.taxonomy') %>%
   filter(OTU %in% otu_names) %>%
   select(name = "OTU", taxonomy = "Taxonomy") %>%
   mutate(taxonomy = str_replace_all(taxonomy, "\\\\|\\\"|\\(\\d+\\)", ""),
          taxonomy = str_replace(taxonomy, ";$", "")) %>%
   separate(taxonomy, into=c("Domain", "Phylum", "Class", "Order", "Family", "Genus"),
            sep=";") %>%
-  mutate(Phylum = ifelse(Phylum %in% c('Firmicutes', 'Bacteroidetes', 'Actinobacteria', 'Proteobacteria', 'Bacteria_unclassified', 'Verrucomicrobia'), Phylum, 'Other')) %>%
+  #mutate(Phylum = ifelse(Phylum %in% c('Firmicutes', 'Bacteroidetes', 'Actinobacteria', 'Proteobacteria', 'Bacteria_unclassified', 'Verrucomicrobia'), Phylum, 'Other')) %>%
   mutate(Phylum = case_when(
     Phylum == 'Firmicutes' ~ 'Bacillota',
     Phylum == 'Bacteroidetes' ~ 'Bacteroidota',

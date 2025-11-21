@@ -8,7 +8,7 @@ library(ggpubr)
 library(scales)
 
 set.seed(96)
-theme_set(theme_bw())
+theme_set(theme_bw(base_size = 14))
 
 otutab <- readRDS('data/longitudinal_amplicons/otutab_ethanol_bulk.RDS')
 taxtab <- readRDS('data/longitudinal_amplicons/taxtab.RDS')
@@ -18,9 +18,9 @@ norm_rel <- readRDS('data/longitudinal_amplicons/otutab_normrel.RDS') %>%
   left_join(select(metadata, Group, original_sample), by = 'Group')
 
 col_phylum = c('#1F77B4', '#FF7F0E',  '#2CA02C',  '#D62728', '#9467BD', '#8C564B', '#f4d03f')
-cole = c('#d87328')
-colm = c('#27ae60')
-colme = c('#27ae60', '#d87328' )
+cole = c('#f0a336')
+colm = c('#3CB371')
+colme = c('#3CB371', '#f0a336')
 
 # efficiency of ethanol treatment on stool samples in this study
 norm_rel2 <- filter(norm_rel, substr(Group, 1, 1) == 'M') %>%  
@@ -89,6 +89,8 @@ alpha_meta <- as_tibble(as.list(evenness)) %>% pivot_longer(names_to = 'Group', 
   left_join(as_tibble(as.list(shannon)) %>% pivot_longer(names_to = 'Group', values_to = 'shannon', cols = starts_with(c('M', 'S')))) %>%
   left_join(metadata, by='Group') %>%
   mutate(person2 = person)
+
+saveRDS(alpha_meta, 'data/longitudinal_amplicons/alpha.RDS')
 
 # Observed number of OTUs
 # between hosts
