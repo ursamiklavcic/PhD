@@ -7,7 +7,7 @@ library(tibble)
 library(lubridate)
 library(tidyr)
 
-theme_set(theme_bw())
+theme_set(theme_bw(base_size=14))
 
 metadata <- read.table('~/projects/longitudinal_shotgun/data/metadata.csv', header= TRUE, sep = ';') %>%
   mutate(date = dmy(date))
@@ -45,7 +45,7 @@ filter(virus2, biota == 'bulk microbiota') %>%
   geom_line(aes(color = Class), linewidth=1.5) +
   scale_y_log10() +
   facet_wrap(~person, scales = 'free', nrow = 3) +
-  labs(x = 'Day', y = '# reads per million [log10]', fill = 'Pre-defined event')
+  labs(x = 'Day', y = '# reads per million [log10]', fill = 'Event')
 ggsave('out/geNomad/sumTPM_viruses_bulk.png', dpi = 600)
 
 virus3 <- virus %>% 

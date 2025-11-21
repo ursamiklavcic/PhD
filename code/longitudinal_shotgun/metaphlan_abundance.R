@@ -9,7 +9,7 @@ library(ggnewscale)
 library(vegan)
 library(ggpubr)
 
-theme_set(theme_bw())
+theme_set(theme_bw(base_size=14))
 col <- c('#3CB371', '#f0a336')
 colm <- '#3CB371'
 cole <- '#f0a336'
@@ -123,12 +123,13 @@ eukaryota <- filter(abund, Domain == 'Eukaryota', !is.na(Species), !is.na(SGB)) 
   left_join(metadata, by = join_by('name' == 'Group')) 
 
 filter(eukaryota, value > 0) %>%  
-  mutate(species_SGB = paste(Species, SGB)) %>% 
-  ggplot(aes(x = day, y = value, color = species_SGB)) +
-  geom_point(size = 2) +
-  geom_line(linewidth = 1.5) +
+  mutate(#species_SGB = paste(Species, SGB), 
+    species = ifelse(str_detect(Species, 'Blastocystis'), 'Blastocystis sp.', 'Saccharomyces cerevisiae')) %>% 
+  ggplot(aes(x = as.factor(day), y = value, fill = species)) +
+  geom_col(position = 'dodge') +
+  scale_fill_manual(values = c('#2761F5', '#4BC4BF')) +
   facet_wrap(~person, scales = 'free', nrow = 3) +
-  labs(x = 'Day', y = 'Relative abundance [%]', color = 'Species \n&\nSGB') +
+  labs(x = 'Day', y = 'Relative abundance [%]', fill = 'Species') +
   theme(legend.position = 'bottom') +
   guides(color = guide_legend(nrow = 2, byrow = TRUE))
 ggsave('out/metaphlan/eukaryota_SGB.png', dpi = 600)
@@ -154,7 +155,8 @@ bacteria <- filter(abund, Domain == 'Bacteria', !is.na(Phylum), !is.na(Class),
                    !is.na(Order), !is.na(Family), !is.na(Genus), !is.na(Species), !is.na(SGB)) %>% 
   pivot_longer(-c(Domain, Phylum, Class, Order, Family, Genus, Species, SGB)) %>% 
   left_join(metadata, by = join_by('name' == 'Group')) %>% 
-  mutate(PA = ifelse(value > 0, 1, 0))
+  mutate(PA = ifelse(value > 0, 1, 0)) %>% 
+  filter(!is.na(biota))
 
 bacteria %>% 
   ggplot(aes(x = value, y = Phylum, fill = biota)) +
@@ -262,7 +264,7 @@ ggsave('out/metaphlan/mpa_shannon.png')
 
 # Composition
 bacteria %>% 
-  filter(biota == 'bulk microbiota') %>%
+  filter(biota == 'Bulk microbiota') %>%
   ggplot(aes(x = factor(day), y = value, fill = Phylum)) +
   geom_col() +
   facet_wrap(~person, scales = 'free_x') +
