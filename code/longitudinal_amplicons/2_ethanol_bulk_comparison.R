@@ -150,8 +150,13 @@ ggplot(alpha_meta, aes(x = person, y = shannon, color = person )) +
   theme(legend.position = 'none')
 ggsave('longitudinal_amplicons/plots/EM_shannon_between_hosts.png', dpi=600)
 
+event_data <- read.table('data/extreme_event_data.csv', sep = ',', header = TRUE)
+
 # in time within host 
 ggplot(alpha_meta, aes(x=day, y=shannon)) +
+  geom_rect(data = event_data, aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = Inf, fill = extremevent_type), inherit.aes = FALSE,
+            alpha = 0.6) +
+  scale_fill_manual(values = c('white','#d94343', '#d98e43', '#f1f011', '#0c9910', '#3472b7', '#7934b7', '#b73485', '#0f5618')) +
   geom_line(data=alpha_meta %>% dplyr::select(-person) %>% filter(biota == 'Bulk microbiota'), 
             aes(group=person2), color= colm, linewidth=0.5, alpha=0.5) +
   geom_line(data=alpha_meta %>% dplyr::select(-person) %>% filter(biota == 'Ethanol treated sample'), 
@@ -161,8 +166,9 @@ ggplot(alpha_meta, aes(x=day, y=shannon)) +
   geom_line(data=alpha_meta %>% filter(biota == 'Ethanol treated sample'), 
             color=cole, linewidth=1.2) +
   facet_wrap(~person, scales = 'free') +
-  labs(x='Day', y= 'Shannon', color = 'Sample')
-ggsave('longitudinal_amplicons/plots/EM_shannon_time.png', dpi=600)
+  labs(x='Day', y= 'Shannon index', color = 'Sample', fill = 'Event')
+ggsave('out/longitudinal_amplicons/EM_shannon_time.png', dpi=600)
+
 
 # Correlations between bulk microbiota and ethanol treated samples 
 # Evenness correlation 
@@ -400,6 +406,8 @@ nmds_bray <- plot_nmds(otutab, 'bray', 'M') %>%
   rbind(plot_nmds(otutab, 'bray', 'S') %>%
           mutate(biota = 'Ethanol treated sample') )
 
+
+
 ggarrange(plot_nmds(otutab, 'bray', 'M') %>%
   ggplot(aes(x= NMDS1, y= NMDS2, color = person)) +
   geom_point(size=4) +
@@ -413,7 +421,13 @@ ggarrange(plot_nmds(otutab, 'bray', 'M') %>%
     scale_y_continuous(breaks = c(-1, 0, 1)) +
     labs(x='', y='', color = 'Individual', subtitle = 'Ethanol treated samples'), 
   common.legend = TRUE, legend = 'bottom' )
-ggsave('longitudinal_amplicons/plots/EM_nmds.png', dpi=600)
+ggsave('out/longitudinal_amplicons/EM_nmds.png', dpi=600)
+
+nmds_otu <- plot_nmds(otutab, 'bray', 'M') %>%
+  ggplot(aes(x= NMDS1, y= NMDS2, color = person)) +
+  geom_point(size=4) +
+  labs(x='NMDS1', y='NMDS2', color = 'Individual') 
+saveRDS(nmds_otu, 'out/longitudinal_amplicons/nmds_otu.RDS')
 
 # If I normalize distances of each individual with min-max normalization, so that the dispersion of each individuals cluster does not account
 # for the differences between microbiota and sporobiota!
