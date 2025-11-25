@@ -214,7 +214,7 @@ alpha <- left_join(n, as_tibble(as.list(shannon)) %>%
                    by = 'name') %>%
   left_join(metadata, by = join_by('name' == 'Group')) %>% 
   mutate(person2 = person) 
-
+alpha
 saveRDS(alpha, 'data/longitudinal_shotgun/alpha_diveristy.RDS')
 
 # event data
@@ -301,6 +301,18 @@ dist_meta %>%
   labs(color = 'Individual', shape = '') +
   theme(legend.position = 'bottom')
 ggsave('out/metaphlan/mps_nmds_bray_sample_type.png')
+
+# For only microbiota 
+nmds_mpa <- dist_meta %>% filter(biota == 'bulk microbiota') %>% 
+  ggplot(aes(x=NMDS1, y=NMDS2, color=person)) +
+  geom_point(size = 5) +
+  labs(color = 'Individual') 
+
+nmds_otu <- readRDS('out/longitudinal_amplicons/nmds_otu.RDS')
+
+ggarrange(nmds_otu +labs(tag = 'A'), nmds_mpa +labs(tag = 'B'), common.legend = T, 
+          legend = 'bottom')
+ggsave('out/nmds_both.png', dpi = 600)
 
 dist_meta %>%
   mutate(extreme = ifelse(extremevent_type != '', 'extreme event', '')) %>% 
