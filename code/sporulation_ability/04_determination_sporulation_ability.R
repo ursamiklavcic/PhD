@@ -10,10 +10,9 @@ library(tibble)
 library(purrr)
 
 set.seed(96)
-theme_set(theme_bw())
+theme_set(theme_bw(base_size = 14))
 
 col <- c('#3CB371', '#f0a336')
-col2 <- c('#A7E2C1', '#F7CD92')
 colm <- '#3CB371'
 cole <- '#f0a336'
 
@@ -72,6 +71,29 @@ ggplot(blast, aes(x = spore_genes, y = sporulation_score)) +
   geom_hline(yintercept = 0.5)
 ggsave('out/sporulation/sporulation_score_n_genes_.png')
 
+# Histogram sporulation genes 
+blast %>% 
+  separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species'), sep="\\|") %>% 
+  mutate(Phylum = str_remove_all(Phylum, 'p__')) %>% 
+  mutate(Phylum = case_when(
+        Phylum == 'Actinobacteria' ~ 'Actinomycetota',
+        Phylum == 'Bacteria_unclassified' ~ 'unclassified Bacteria',
+        Phylum == 'Candidatus_Saccharibacteria' ~ 'Saccharibacteria',
+        Phylum == 'Chloroflexi' ~ 'Chloroflexota',
+        Phylum == 'Firmicutes' ~ 'Bacillota',
+        Phylum == 'Fusobacteria' ~ 'Fusobacterium',
+        Phylum == 'Lentisphaerae' ~ 'Lentisphaerota',
+        Phylum == 'Proteobacteria' ~ 'Pseudomonadota',
+        Phylum == 'Synergistetes' ~ 'Synergistota',
+        Phylum == 'Verrucomicrobia' ~ 'Verrucomicrobiota',
+        TRUE ~ Phylum )) %>% 
+  ggplot(aes(x = spore_genes, fill = Phylum)) +
+  geom_histogram(binwidth = 1) + 
+  geom_vline(xintercept = 33) +
+  scale_x_continuous(breaks = c(10, 20, 30, 40, 50, 60)) +
+  labs(x = '# sporulation genes', y = '# genomes')
+ggsave('out/sporulation/no_genomes_sporulation_genes.png', dpi=600)
+
 
 # 
 # Sporulation ability based on Browne et al. 2021
@@ -83,9 +105,9 @@ gene_counts <- blastpre %>%
 gene_counts %>% 
   separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species'), sep="\\|") %>% 
   ggplot(aes(x = n_gene)) +
-  geom_histogram() +
-  geom_vline(xintercept = 33) +
-  facet_wrap(~Family, scales = 'free_y')
+  geom_histogram(binwidth = 1) +
+  geom_vline(xintercept = 33) 
+  #facet_wrap(~Family, scales = 'free_y')
 ggsave('out/sporulation/spore_genes_family.png', width = 29, height = 15, units = 'cm')
 
 spore_ability <- blastpre %>% 
