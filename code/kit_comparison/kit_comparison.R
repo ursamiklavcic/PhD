@@ -228,7 +228,7 @@ p_shannon <- pairwise.t.test(conc$Concentration, conc$Protocol, paired = TRUE, p
 
 shannon <- ggplot(alpha_meta, mapping = aes(x=kit, y=shannon)) + 
   geom_point(aes(shape=individual, color = individual), size = 5) + 
-  stat_compare_means(mapping = aes(label = after_stat(p.signif)), method = "t.test", paired=F,
+  stat_compare_means(method = "t.test", paired=F,mapping = aes(label = paste0("p = ", after_stat(p.format))), 
                      comparisons=list(#c("NucleoSpin", "FastDNA"), c("NucleoSpin", "PowerFecal"), c("FastDNA", "PowerFecal"),
                                       c('FastDNA', 'Dneasy'), c('PowerFecal', 'Dneasy'), c('NucleoSpin', 'Dneasy'))) +
   scale_color_manual(values = col_human, name = "Individual") +
@@ -248,10 +248,13 @@ nmds_positions <-
   na.omit()
 
 permanova <- adonis2(dist ~ kit, data = metadata, method = 'bray', permutations = 999)
+betadis <- betadisper(dist, metadata$kit)
+boxplot(betadis, xlab = '')
+anova(betadis)
 
 kits <- ggplot(nmds_positions, aes(x=NMDS1, y=NMDS2, color=kit, shape = individual)) +
   geom_point(size=5) +
-  annotate('text', x = 0.5, y = 0.6, label = paste('PERMANOVA, p = 0.002')) +
+  annotate('text', x = 0.5, y = 0.6, label = paste('ANOVA, p = 0.77')) +
   scale_color_manual(values = col_kit) +
   labs(x='', y='', color='Protocol', shape = 'Individual')
 kits
