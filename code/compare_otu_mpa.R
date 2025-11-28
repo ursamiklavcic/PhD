@@ -98,11 +98,11 @@ ggsave('out/compare_otu_genera.png')
 
 
 all %>% ggplot(aes(x = genus_otus, y = genus_meta, color = biota)) +
-  geom_point() +
+  geom_point(size = 3) +
   scale_color_manual(values = c('#3CB371', '#f0a336')) +
   facet_wrap(~biota, scales = 'free') +
   geom_abline()+  
-  labs(x = '# genera/sample in shotgun metagenomic data', y = '# genera/sample in amplicon data',  color = '') +
+  labs(x = '# genera / sample\n [shotgun metagenomic data]', y = '# genera / sample\n [amplicon data]',  color = '') +
   theme(legend.position = 'none')
 ggsave('out/compare_genera.png')
 
@@ -164,16 +164,69 @@ alpha_otu <- readRDS('data/longitudinal_amplicons/alpha.RDS')
 
 alpha <- full_join(alpha_otu, alpha_mpa, by = join_by('Group' == 'name'))
 
+events <- read.table('data/extreme_event_data.csv', sep = ',', header = T)
+
 alpha %>% filter(biota == 'Bulk microbiota') %>% 
   pivot_longer(names_to = 'sample', values_to = 'shannon', cols = starts_with('shannon')) %>% 
-  ggplot(aes(x=day, y=shannon)) +
-  geom_line(data=alpha_meta %>% dplyr::select(-person) %>% filter(biota == 'Bulk microbiota'), 
-            aes(group=person2), color= colm, linewidth=0.5, alpha=0.5) +
-  geom_line(data=alpha_meta %>% dplyr::select(-person) %>% filter(biota == 'Ethanol treated sample'), 
-            aes(group=person2), color= cole, linewidth=0.5, alpha=0.5)+
-  geom_line(data=alpha_meta %>% filter(biota == 'Bulk microbiota'),
-            aes(color=person), color= colm, linewidth=1.2) +
-  geom_line(data=alpha_meta %>% filter(biota == 'Ethanol treated sample'), 
-            color=cole, linewidth=1.2) +
-  facet_wrap(~person, scales = 'free') +
-  labs(x='Day', y= '#OTUs', color = 'Sample'))
+  mutate(sample = ifelse(sample == 'shannon.x', 'Amplicon data', 'Shotgun metagenomic data')) %>% 
+  ggplot(aes(x=day, y=shannon, color = sample)) +
+  geom_rect(data = events, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf, fill = extremevent_type), inherit.aes = FALSE,
+            alpha = 0.6) +
+  scale_fill_manual(values = c('white','#d94343', '#d98e43', '#f1f011', '#0c9910', '#3472b7', '#7934b7', '#b73485', '#0f5618')) +
+  scale_color_manual(values = c('skyblue', 'violet')) +
+  geom_line(linewidth=1.5) +
+  # geom_line(data=alpha_meta %>% dplyr::select(-person) %>% filter(biota == 'Ethanol treated sample'), 
+  #           aes(group=person2), color= cole, linewidth=0.5, alpha=0.5)+
+  # geom_line(data=alpha_meta %>% filter(biota == 'Bulk microbiota'),
+  #           aes(color=person), color= colm, linewidth=1.2) +
+  # geom_line(data=alpha_meta %>% filter(biota == 'Ethanol treated sample'), 
+  #           color=cole, linewidth=1.2) +
+  facet_wrap(~person, scales = 'free_x') +
+  labs(x='Day', y= 'Shannon', color = 'Data type', fill = 'Event') +
+  theme(legend.position = 'bottom')
+ggsave('out/alpha_otu_mpa.svg', dpi = 600)
+
+
+# Beta diveristy 
+beta_mpa <- readRDS('data/longitudinal_shotgun/nmds_mpa_positions.rds')
+beta_otu <- readRDS('data/longitudinal_amplicons/nmds_otu_positions.RDS')
+
+dist_otu <- readRDS('data/longitudinal_amplicons/dist_otu.RDS')
+dist_mpa <- readRDS('data/longitudinal_shotgun/dist_mpa.RDS')
+
+# Betadisper 
+otu_disp <- betadisper(dist_otu, beta_otu$person)
+boxplot(otu_disp)
+ggsave('out/boxplot_betadisper_otu.png')
+anova(otu_disp)
+TukeyHSD(otu_disp)
+
+nmds_otu <- beta_otu %>%
+  ggplot(aes(x=NMDS1, y=NMDS2, color=person)) +
+  geom_point(size = 5) +
+  labs(color = 'Individual') +
+  labs(tag ='A') +
+  guides(color = guide_legend(nrow = 1)) +
+  theme(legend.position = "bottom")
+nmds_otu
+
+# 
+mpa_disp <- betadisper(dist_mpa, beta_mpa$person)
+boxplot(mpa_disp)
+ggsave('out/boxplot_betadisper_mpa.png')
+anova(mpa_disp)
+TukeyHSD(mpa_disp)
+
+
+nmds_mpa <- beta_mpa %>% 
+  filter(!is.na(person), biota == 'Bulk microbiota') %>% 
+  ggplot(aes(x=NMDS1, y=NMDS2, color=person)) +
+  geom_point(size = 5) +
+  labs(color = 'Individual') +
+  labs(tag ='B') +
+  guides(color = guide_legend(nrow = 1)) +
+  theme(legend.position = "bottom")
+nmds_mpa
+
+ggarrange(nmds_otu, nmds_mpa, common.legend = T, legend = 'bottom') 
+ggsave('out/nmds_both.png')
