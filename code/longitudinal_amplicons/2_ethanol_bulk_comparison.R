@@ -407,7 +407,6 @@ nmds_bray <- plot_nmds(otutab, 'bray', 'M') %>%
           mutate(biota = 'Ethanol treated sample') )
 
 
-
 ggarrange(plot_nmds(otutab, 'bray', 'M') %>%
   ggplot(aes(x= NMDS1, y= NMDS2, color = person)) +
   geom_point(size=4) +
@@ -428,6 +427,25 @@ nmds_otu <- plot_nmds(otutab, 'bray', 'M') %>%
   geom_point(size=4) +
   labs(x='NMDS1', y='NMDS2', color = 'Individual') 
 saveRDS(nmds_otu, 'out/longitudinal_amplicons/nmds_otu.RDS')
+
+# for comparison to mpa 
+tab_filt <- as.data.frame(otutab) %>%
+  rownames_to_column('Group') %>%
+  filter(substr(Group, 1, 1) == 'M') %>%
+  column_to_rownames('Group') %>%
+  as.matrix()
+
+# Calculate dissimilarity / distance
+dist <- vegdist(tab_filt, method = 'bray')
+saveRDS(dist, 'data/longitudinal_amplicons/dist_otu.RDS')
+#  Calculate distances in 2D space
+nmds <- metaMDS(dist)
+# append metadata
+nmds_positions <-as.data.frame(scores(nmds, display='sites')) %>%
+  rownames_to_column('Group') %>%
+  left_join(metadata %>% select(Group, person, date), by = 'Group')
+
+saveRDS(nmds_positions, 'data/longitudinal_amplicons/nmds_otu_positions.RDS')
 
 # If I normalize distances of each individual with min-max normalization, so that the dispersion of each individuals cluster does not account
 # for the differences between microbiota and sporobiota!
