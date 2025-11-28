@@ -66,7 +66,26 @@ pre_abund %>%
   labs(x = '', y = 'Relative abundance [%]')
 ggsave('out/sporulation/rel_abund_sporulation.png', dpi = 600)
 
-# number of species 
+pre_abund %>% 
+  filter(biota == 'bulk microbiota', !is.na(sporulation_ability)) %>% 
+  group_by(person, name, sporulation_ability, is_etoh_resistant) %>%  
+  reframe(sum_rel = sum(value)) %>% 
+  group_by(sporulation_ability, is_etoh_resistant) %>%
+  reframe(mean_rel = mean(sum_rel), 
+          sd_rel = sd(sum_rel))
+  ggplot(aes(x = name, y = sum_rel, fill = sporulation_ability)) +
+  geom_col() +
+  facet_wrap(is_etoh_resistant~person, scales = 'free_x') +
+  theme(axis.text.x = element_text(angle = 90))
+
+  # Number of sporeformers in spore form 
+pre_abund %>% 
+  filter(biota == 'bulk microbiota', !is.na(sporulation_ability)) %>% 
+  filter(value > 0) %>% 
+  group_by(sporulation_ability, is_etoh_resistant) %>% 
+  reframe(PA = n_distinct(Species)) 
+
+# number of spperson# number of species 
 pre_abund %>% 
   mutate(PA = ifelse(value > 0, 1, 0)) %>% 
   filter(PA == 1) %>% 
@@ -165,7 +184,6 @@ bacillota %>%
   ggplot(aes(x = value, color = sporulation_ability)) +
   geom_density(linewidth = 2) +
   scale_x_log10() +
-  scale_color_manual(values = col2) +
   labs(x = 'Relative abundance [log10]', y = 'Density', color = '')
 ggsave('out/sporulation/SNS_density_relabund_bacillota.png')
 
@@ -353,15 +371,15 @@ bray <- dist_bray %>%
          same_fraction = ifelse(spore_ability.x == spore_ability.y, 'Yes', 'No')) %>%
   filter(same_fraction == 'Yes')
 
-bray %>%
+one <- bray %>%
   mutate(spore_ability.x = ifelse(spore_ability.x == 'S_', 'Spore-forming', 'Non-spore-forming')) %>% 
-  ggplot(aes(x=spore_ability.x, y=median_value, fill=spore_ability.y)) +
+  ggplot(aes(x=spore_ability.x, y=median_value, fill=spore_ability.x)) +
   geom_boxplot() +
   stat_compare_means() +
-  scale_fill_manual(values = col2) +
+  scale_fill_manual(values = col) +
   facet_wrap(~same_person) +
-  labs(x = 'Community', y = 'Median Bray-Curtis dissimilarity') +
-  theme(legend.position = 'none')
+  labs(x = '', y = 'Median Bray-Curtis dissimilarity', fill = '') 
+one 
 ggsave('out/sporulation/SNS_bray_curtis_boxplot_all.png')
 
 # in time 
@@ -387,7 +405,7 @@ time_bray <-  as.matrix(dist) %>%
   group_by(spore_ability.x, person.x, diff) %>%
   reframe(median=median(value)) 
 
-time_bray %>%
+time <- time_bray %>%
   ggplot(aes(x=diff, y=median, color=spore_ability.x)) +
   geom_point() +
   geom_smooth(method = 'lm') +
@@ -395,8 +413,13 @@ time_bray %>%
   labs(x='Days between sampling', y='Median Bray-Curtis distance', color='') +
   theme(legend.position = 'bottom') +
   guides(fill = guide_legend(ncol = 2)) +
-  scale_color_manual(values = col2) 
+  scale_color_manual(values = col) 
+time 
 ggsave('out/sporulation/SNS_time_braycurtis_all.png')
+
+ggarrange(one + labs(tag = 'A'), time + labs(tag = 'B'), common.legend = T,  
+          legend = 'bottom')
+ggsave('out/sporulation/intra_inter_time_BC.png', dpi = 600)
 
 # Sharing species between individuals 
 # not by Phylum 
