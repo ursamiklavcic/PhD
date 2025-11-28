@@ -7,7 +7,7 @@ library(lubridate)
 library(ggpubr)
 
 set.seed(96)
-theme_set(theme_bw(base_size = 15))
+theme_set(theme_bw(base_size = 14))
 
 # Metadata 
 metadata <- read.table('data/metadata.csv', header= TRUE, sep = ';') %>%
@@ -59,11 +59,11 @@ kingdom_contigs <- contigs %>%
 conitgs_domain <- kingdom_contigs %>% 
   mutate(Kingdom = factor(Kingdom, levels = c('Archaea', 'Bacteria', 'Eukaryota', 'Viruses', 'UNCLASSIFIED')), 
          x = 'DIAMOND + LCA') %>% 
-  ggplot(aes(x = x, y = rel_abund, fill = Kingdom)) +
+  ggplot(aes(x = rel_abund, y = x, fill = Kingdom)) +
   geom_col() +
   scale_fill_manual(values = c('#4E9E23', '#29BCE3', '#D13D21', '#FAE528', 'grey')) +
-  labs(x = '', y = 'Relative abundance [%]', fill = 'Domain')+
-  theme(axis.ticks.x = element_blank())
+  labs(y = '', x = 'Relative abundance [%]', fill = 'Domain')+
+  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank())
 
 
 
@@ -87,26 +87,27 @@ domain <- filter(abund, is.na(Phylum)) %>%
   select(-c(Phylum, Class, Order, Family, Genus, Species, SGB)) %>% 
   pivot_longer(-Domain) %>%  
   left_join(metadata, by = join_by('name' == 'Group')) %>% 
-  group_by(biota) %>% 
-  mutate(rel_abund = value /sum(value) * 100, 
-         x = 'MetaPhlAn') %>% 
-  filter(biota == 'bulk microbiota') %>%  
-  ggplot(aes(x = x, y = rel_abund, fill = Domain)) +
+  filter(biota == 'bulk microbiota') %>% 
+  mutate(rel_abund = value /sum(value) * 100) %>% 
+  group_by(Domain) %>% 
+  reframe(rel_abund = sum(rel_abund)) %>%  
+  mutate( x = 'MetaPhlAn') %>%  
+  ggplot(aes(x = rel_abund, y = x, fill = Domain)) +
   geom_col() +
   scale_fill_manual(values = c('#4E9E23', '#29BCE3', '#D13D21','grey')) +
-  labs(x = '', y = 'Relative abundance [%]') +
-  theme(axis.ticks.x = element_blank())
+  scale_x_continuous(breaks = c(0, 25, 50, 75, 100), limits = c(0, 100)) +
+  labs(y = '', x = 'Relative abundance [%]') +
+  theme(axis.ticks.y = element_blank(),  axis.text.y = element_blank())
+domain
 
-
-ggarrange(conitgs_domain + labs(tag = 'A'), 
-          domain + labs(tag = 'B'), 
+ggarrange(conitgs_domain + labs(tag = 'A. DIAMOND + LCA'), 
+          domain + labs(tag = 'B. MetaPhlAn'), ncol = 1, nrow = 2, align = 'v', 
           common.legend = TRUE, 
           legend = 'bottom')
+ggsave('out/DIAMOND_metaphlan.svg', dpi=600)
 ggsave('out/DIAMOND_metaphlan.png', dpi=600)
 
-
 # 
-
 contigs %>%
   group_by(Kingdom) %>%
   summarise(no_contigs = n_distinct(contigID)) %>%

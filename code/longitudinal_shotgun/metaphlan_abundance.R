@@ -281,12 +281,13 @@ ggsave('out/metaphlan/mpa_rel_abund_bact_etoh.png')
 
 
 # Beta diveristy 
-tab <- select(bacteria, SGB, name, value) %>% 
+tab <- filter(bacteria, biota == 'bulk microbiota') %>% select(SGB, name, value) %>% 
   pivot_wider(names_from = 'name', values_from = 'value', values_fill = 0) %>% 
   column_to_rownames('SGB') %>%  
   t()
 
 dist <- vegdist(tab, method = 'bray')
+saveRDS(dist, 'data/longitudinal_shotgun/dist_mpa.RDS')
 nmds <- metaMDS(dist)
 
 nmds_positions <- as.data.frame(scores(nmds, display="sites")) %>%
@@ -294,6 +295,7 @@ nmds_positions <- as.data.frame(scores(nmds, display="sites")) %>%
 
 dist_meta = nmds_positions %>%
   left_join(metadata, by = 'Group')
+saveRDS(dist_meta, 'data/longitudinal_shotgun/nmds_mpa_positions.rds')
 
 dist_meta %>%
   ggplot(aes(x=NMDS1, y=NMDS2, color=person, shape = biota)) +
