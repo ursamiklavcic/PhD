@@ -10,7 +10,7 @@ library(ggpubr)
 library(lubridate)
 
 set.seed(96)
-theme_set(theme_bw())
+theme_set(theme_bw(base_size = 14))
 
 metadata <- read_csv2('~/projects/longitudinal_shotgun/data/metadata.csv') 
 
@@ -149,7 +149,7 @@ amr_unique
 ggarrange(amr_unique + labs(tag = 'A'), 
           amr_tpm + labs(tag = 'B'), 
           common.legend = T, legend = 'bottom', 
-          nrow = 1)
+          nrow = 2)
 
 ggsave('out/ARGs/unique_tpm_args_mechanism.png', dpi = 600)
 library(svglite)
