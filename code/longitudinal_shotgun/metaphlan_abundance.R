@@ -53,6 +53,9 @@ abund <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_tabl
 
 length(unique(filter(abund, Domain == 'Bacteria')$Species))
 
+event_data <- read.table('data/extreme_event_data.csv', sep = ',', header = TRUE)
+
+
 # abund_gtdb <- read.table('~/projects/longitudinal_shotgun/data/gtdb_merged.txt', sep = '\t', header = TRUE) %>% 
 #   pivot_longer(-clade_name) %>% 
 #   filter(grepl('s__', clade_name)) %>% 
@@ -78,7 +81,8 @@ ggsave('out/metaphlan/mpa_rel_abund_kingdom.png')
 # Archea
 archaea <- filter(abund, Domain == 'Archaea', !is.na(Species), !is.na(SGB)) %>% 
   pivot_longer(-c(Domain, Phylum, Class, Order, Family, Genus, Species, SGB)) %>%  
-  left_join(metadata, by = join_by('name' == 'Group')) 
+  left_join(metadata, by = join_by('name' == 'Group')) %>% 
+  filter(biota == 'bulk microbiota')
 
 ag <- archaea %>% 
   filter(value > 0) %>%  
@@ -102,25 +106,44 @@ as
 ggsave('out/metaphlan/archaea_species.png', dpi=600)
 ggsave('out/metaphlan/archaea_species.svg')
 
-ggarrange(ag + labs(tag = 'A'), as + labs(tag = 'B'), 
-          widths = c(0.6, 1))
+event_data_archea <- filter(event_data, person %in% c('C', 'E', 'F', 'G', 'H'))
 
 archaea %>% 
   filter(value > 0) %>%  
-  mutate(species_SGB = paste(Species, SGB)) %>% 
-  ggplot(aes(x = day, y = value, color = species_SGB)) +
+  ggplot(aes(x = day, y = value, color = Species)) +
+  geom_rect(data = event_data_archea, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = extremevent_type), inherit.aes = FALSE,
+            alpha = 0.6) +
+  scale_fill_manual(values = c('white','#d94343', '#d98e43', '#f1f011', '#0c9910', '#3472b7', '#7934b7', '#b73485', '#0f5618')) +
   geom_point(size = 2) +
   geom_line(linewidth = 1.5) +
-  facet_wrap(~person, scales = 'free', nrow = 5) +
-  labs(x = 'Day', y = 'Relative abundance [%]', color = 'Species \n&\nSGB') +
-  theme(legend.position = 'bottom') +
-  guides(color = guide_legend(nrow = 3, byrow = TRUE))
-ggsave('out/metaphlan/archaea_SGB.png')
+  scale_color_manual(values = c('#27CFF5', '#671BA6')) +
+  facet_wrap(~person, scales = 'free', nrow = 3) +
+  labs(x = 'Day', y = 'Relative abundance [%]') +
+  theme(legend.position = 'bottom') 
+ggsave('out/metaphlan/archaea_species_line.svg')
 
 # Eukaryota
 eukaryota <- filter(abund, Domain == 'Eukaryota', !is.na(Species), !is.na(SGB)) %>% 
   pivot_longer(-c(Domain, Phylum, Class, Order, Family, Genus, Species, SGB)) %>%  
   left_join(metadata, by = join_by('name' == 'Group')) 
+
+filter(eukaryota, value > 0) %>%  
+  mutate(#species_SGB = paste(Species, SGB), 
+    species = ifelse(str_detect(Species, 'Blastocystis'), 'Blastocystis sp.', 'Saccharomyces cerevisiae')) %>% 
+  ggplot(aes(x = day, y = value, color = species)) +
+  geom_rect(data = event_data_eu, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = extremevent_type), inherit.aes = FALSE,
+            alpha = 0.6) +
+  scale_fill_manual(values = c('white','#d94343', '#d98e43', '#f1f011', '#0c9910', '#3472b7', '#7934b7', '#b73485', '#0f5618')) +
+  geom_point(size = 3) +
+  geom_line(linewidth = 1.5) +
+  scale_color_manual(values = c('#2761F5', '#4BC4BF')) +
+  facet_wrap(~person, scales = 'free', nrow = 3) +
+  labs(x = 'Day', y = 'Relative abundance [%]', color = 'Species') +
+  theme(legend.position = 'bottom') +
+  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+ggsave('out/metaphlan/eukaryota_species_line.svg')
+
+event_data_eu <- filter(event_data, person %in% c('B','C','D', 'E', 'F', 'G', 'H', 'I'))
 
 filter(eukaryota, value > 0) %>%  
   mutate(#species_SGB = paste(Species, SGB), 
@@ -132,8 +155,7 @@ filter(eukaryota, value > 0) %>%
   labs(x = 'Day', y = 'Relative abundance [%]', fill = 'Species') +
   theme(legend.position = 'bottom') +
   guides(color = guide_legend(nrow = 2, byrow = TRUE))
-ggsave('out/metaphlan/eukaryota_SGB.png', dpi = 600)
-ggsave('out/metaphlan/eukaryota_SGB.svg')
+ggsave('out/metaphlan/eukaryota_species.png', dpi = 600)
 
 # Bacteria 
 # Phylum level 
@@ -208,10 +230,18 @@ tab <- filter(abund, Domain == 'Bacteria', !is.na(Phylum), !is.na(Class),
   column_to_rownames('SGB') %>% 
   t()
 shannon = diversity(tab, index = 'shannon')
+evenness <- diversity(tab)/log(specnumber(tab))
+
+alpha <- 
+  left_join(t(richness) %>% as.data.frame() %>% rownames_to_column('Group'), by='Group') %>%
+  left_join(as_tibble(as.list(shannon)) %>% pivot_longer(names_to = 'Group', values_to = 'shannon', cols = starts_with(c('M', 'S')))) %>%
+  left_join(metadata, by='Group') %>%
+  mutate(person2 = person)
 
 alpha <- left_join(n, as_tibble(as.list(shannon)) %>% 
                      pivot_longer(names_to = 'name', values_to = 'shannon', cols = starts_with(c('M', 'S'))), 
                    by = 'name') %>%
+  full_join(as_tibble(as.list(evenness)) %>% pivot_longer(names_to = 'name', values_to = 'evenness', cols = starts_with(c('M', 'S'))), by = 'name') %>%
   left_join(metadata, by = join_by('name' == 'Group')) %>% 
   mutate(person2 = person) 
 alpha
@@ -225,8 +255,6 @@ saveRDS(alpha, 'data/longitudinal_shotgun/alpha_diveristy.RDS')
 #   mutate(xmin = day - 2, xmax = day +2, ymin = -Inf,ymax = Inf) 
 # write_csv(event_data, 'extreme_event_data.csv')
 # correct the antibiotics data for person H 
-
-event_data <- read.table('data/extreme_event_data.csv', sep = ',', header = TRUE)
 
 # richness
 ggplot(alpha, aes(x=day, y=richness)) +

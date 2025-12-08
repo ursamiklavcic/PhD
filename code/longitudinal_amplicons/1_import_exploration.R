@@ -417,6 +417,7 @@ otutabEM_pre = shared_pre %>%
 otutabEM = rrarefy(otutabEM_pre, sample=reads_per_sample)
 saveRDS(otutabEM, 'thesis/data/otutab_ethanol_bulk.RDS')
 
+otutabEM <- readRDS('data/longitudinal_amplicons/otutab_ethanol_bulk.RDS')
 # Extract OTUs that are present rarefied table 
 otu_names = as.data.frame(otutabEM) %>% colnames() 
 
@@ -438,7 +439,7 @@ taxtab = read_tsv('~/projects/longitudinal_amplicons/data/mothur/final.opti_mcc.
     Phylum == 'Bacteria_unclassified' ~ 'unclassified Bacteria',
     TRUE ~ Phylum ))
 
-saveRDS(taxtab,'thesis/data/taxtab.RDS')
+saveRDS(taxtab,'~/projects/thesis/data/longitudinal_amplicons/taxtab.RDS')
 
 # Import metadata
 metadata = as_tibble(read.csv('data/metadata.csv', sep=';')) %>%

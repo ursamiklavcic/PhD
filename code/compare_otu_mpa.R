@@ -159,7 +159,7 @@ ggsave('out/compare_genera.png')
 
 # Alpha diveristy 
 
-alpha_mpa <- readRDS('data/longitudinal_shotgun/alpha_diveristy.RDS') %>% select(name, richness, shannon)
+alpha_mpa <- readRDS('data/longitudinal_shotgun/alpha_diveristy.RDS') %>% select(name, richness, shannon, evenness)
 alpha_otu <- readRDS('data/longitudinal_amplicons/alpha.RDS')
 
 alpha <- full_join(alpha_otu, alpha_mpa, by = join_by('Group' == 'name'))
@@ -185,6 +185,26 @@ alpha %>% filter(biota == 'Bulk microbiota') %>%
   labs(x='Day', y= 'Shannon', color = 'Data type', fill = 'Event') +
   theme(legend.position = 'bottom')
 ggsave('out/alpha_otu_mpa.svg', dpi = 600)
+
+
+# Richness and evenness
+ggarrange(alpha %>% filter(!is.na(biota)) %>% 
+            ggplot(aes(y = S.obs, x = richness,  color = biota)) +
+            geom_point(size = 3) +
+            geom_abline() +
+            scale_color_manual(values = c('#3CB371', '#f0a336')) +
+            facet_wrap(~biota, scales = 'free') +
+            labs(y = 'Richness [amplicon data]', x = 'Richness [shotgun data]', tag = 'A') +
+            theme(legend.position = 'none'), 
+          alpha %>% filter(!is.na(biota)) %>% 
+            ggplot(aes(y = evenness.x, x = evenness.y, color = biota)) +
+            geom_point(size = 3) +
+            geom_abline() +
+            scale_color_manual(values = c('#3CB371', '#f0a336')) +
+            facet_wrap(~biota, scales = 'free') +
+            labs(y = 'Evenness [amplicon data]', x = 'Evenness [shotgun data]', tag = 'B') +
+            theme(legend.position = 'none'), nrow = 2)
+ ggsave('out/richness_evenntess_compare.png') 
 
 
 # Beta diveristy 
@@ -230,3 +250,71 @@ nmds_mpa
 
 ggarrange(nmds_otu, nmds_mpa, common.legend = T, legend = 'bottom') 
 ggsave('out/nmds_both.png')
+
+# Relative abundance of bacteria for OTUs and MPA 
+otutab <- readRDS('data/longitudinal_amplicons/otutab_ethanol_bulk.RDS')
+taxtab <- readRDS('data/longitudinal_amplicons/taxtab.RDS')
+col_phylum = c('#1F77B4', '#FF7F0E',  '#2CA02C',  '#D62728', '#9467BD', '#8C564B', '#f4d03f', '#0f5618', '#3127F5')
+
+
+otu_long <- as.data.frame(otutab) %>% 
+  rownames_to_column('Group') %>%  
+  pivot_longer(names_to = 'name', values_to = 'value', cols = starts_with('Otu')) %>% 
+  left_join(metadata, by = 'Group') %>% 
+  left_join(taxtab, by = 'name') %>% 
+  group_by(biota) %>% 
+  mutate(rel_abund = value/sum(value) *100) %>% 
+  group_by(biota, Phylum) %>% 
+  reframe(rel = sum(rel_abund)) %>% 
+  mutate(Phylum = ifelse(rel < 0.1, '< 0.1%', Phylum), 
+         Phylum = ifelse(Phylum == 'Tenericutes', 'Mycoplasmatota', Phylum)) %>%  
+  group_by(biota, Phylum) %>% 
+  reframe(rel = sum(rel))
+
+otu_long$Phylum <- factor(otu_long$Phylum, levels = c('Bacillota', 'Bacteroidota', 'Actinomycetota', 'Pseudomonadota',
+                                                    'Verrucomicrobiota', 'Mycoplasmatota' ,'unclassified Bacteria', '< 0.1%'))
+# Relative abundance plots for comparison
+rel_otu <- otu_long %>%
+  ggplot(aes(x = biota, y = rel, fill = Phylum)) +
+  geom_col() +
+  scale_fill_manual(values = col_phylum) +
+  labs(x = '', y= 'Relative abundance [%]', fill = 'Phylum')
+rel_otu 
+
+#mpa 
+mpa_long <- bacteria %>% 
+  group_by(name, biota, Phylum) %>%  
+  reframe(rel = sum(value)) %>% 
+  group_by(biota, Phylum) %>%  
+  reframe(rel = mean(rel)) %>% 
+  mutate(Phylum = ifelse(rel < 0.1, '< 0.1%', Phylum)) %>%  
+  mutate(Phylum = case_when(
+        Phylum == 'Actinobacteria' ~ 'Actinomycetota',
+        Phylum == 'Candidatus_Saccharibacteria' ~ 'Saccharibacteria',
+        Phylum == 'Chloroflexi' ~ 'Chloroflexota',
+        Phylum == 'Proteobacteria' ~ 'Pseudomonadota',
+        Phylum == 'Lentisphaerae' ~ 'Lentisphaerota',
+        Phylum == 'Fusobacteria' ~ 'Fusobacterium',
+        Phylum == 'Verrucomicrobia' ~ 'Verrucomicrobiota',
+        Phylum == 'Bacteria_unclassified' ~ 'unclassified Bacteria',
+        Phylum == 'Candidatus_Melainabacteria' ~ 'Cyanobacteria',
+        Phylum == 'Synergistetes' ~ 'Synergistota',
+        Phylum == 'Tenericutes' ~ 'Mycoplasmatota',
+        TRUE ~ Phylum )) %>%  
+  group_by(biota, Phylum) %>% 
+  reframe(rel = sum(rel))
+  
+
+mpa_long$Phylum <- factor(mpa_long$Phylum, levels = c('Bacillota', 'Bacteroidota', 'Actinomycetota', 'Pseudomonadota',
+                                                      'Mycoplasmatota', 'Cyanobacteria', 'Verrucomicrobiota','< 0.1%'))
+
+rel_both <- otu_long %>%  mutate(data = 'Amplicon data') %>% 
+  rbind(mpa_long %>%  mutate(data = 'Shotgun data', 
+                             biota = ifelse(biota == 'bulk microbiota', 'Bulk microbiota', 'Ethanol treated sample')))
+
+ggplot(rel_both, aes(x = data, y = rel, fill = Phylum)) +
+  geom_col() +
+  facet_wrap(~biota, nrow = 1, scales = 'free_x') +
+  scale_fill_manual(values = col_phylum) +
+  labs(x = "", y = "Relative abundance [%]", fill = "Phylum") 
+ggsave('out/rel_abund.png')
