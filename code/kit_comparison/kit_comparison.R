@@ -188,7 +188,7 @@ alpha_meta = as_tibble(as.list(evenness)) %>% pivot_longer(names_to = 'Group', v
   na.omit()
 
 evenness_plot <- ggplot(alpha_meta, mapping = aes(x=kit, y=evenness, color=kit)) + 
-  geom_point(size = 3) + 
+  geom_point(size = 4) + 
   stat_compare_means(mapping = aes(label = after_stat(p.signif)), method = "t.test", paired = FALSE,
                      comparisons=list(c('FastDNA', 'Dneasy'), c('PowerFecal', 'Dneasy'), c('NucleoSpin', 'Dneasy')
                                       #c("NucleoSpin", "FastDNA"), c("NucleoSpin", "PowerFecal"), c("FastDNA", "PowerFecal"), 
@@ -197,7 +197,7 @@ evenness_plot <- ggplot(alpha_meta, mapping = aes(x=kit, y=evenness, color=kit))
   labs(x='', y="Evenness", color="") +
   theme(legend.position = 'none') 
 evenness_plot
-
+ggsave('out/kit_comparison/evenness.png', dpi = 600)
 # Chao1 
 chao_plot <- ggplot(alpha_meta, mapping = aes(x=kit, y=S.chao1, color=kit)) + 
   geom_point() + 
@@ -237,6 +237,8 @@ shannon <- ggplot(alpha_meta, mapping = aes(x=kit, y=shannon)) +
   theme(legend.position = 'bottom') 
 shannon
 
+evenness_plo
+
 # Beta diversity 
 dist <- vegdist(otutab, method = 'bray')
 
@@ -254,9 +256,10 @@ anova(betadis)
 
 kits <- ggplot(nmds_positions, aes(x=NMDS1, y=NMDS2, color=kit, shape = individual)) +
   geom_point(size=5) +
-  annotate('text', x = 0.5, y = 0.6, label = paste('ANOVA, p = 0.77')) +
+  annotate('text', x = 0, y = 0.4, label = paste('PERMANOVA, p = 0.005')) +
   scale_color_manual(values = col_kit) +
   labs(x='', y='', color='Protocol', shape = 'Individual')
+
 kits
 ggsave('kit_comparison/plots/nmds_bray.png', dpi=600)
 
@@ -298,12 +301,50 @@ rel_plot <- rel_abund %>%
   ggplot(aes(x = kit, y = sum, fill = Phylum)) +
   geom_col() +
   labs(x = '', y = 'Relative abundance [%]')
+rel_plot
 
 
-ggarrange(conc_plot + labs(tag = 'A'), shannon + labs(tag = 'B'),  
-          kits + labs(tag = 'C'), rel_plot + labs(tag = 'D'),
+# How many different OTUs per phlyum per kit? 
+no_abund <- otutab %>% 
+  as.data.frame() %>% 
+  rownames_to_column('Group') %>% 
+  pivot_longer(starts_with('Otu')) %>%
+  left_join(metadata, by = 'Group') %>% 
+  left_join(taxtab, by = 'name') %>% 
+  mutate(PA = ifelse(value > 0, 1, 0)) %>% 
+  group_by(kit, Phylum) %>% 
+  reframe(sum = sum(PA)) %>% 
+  mutate(Phylum = ifelse(sum < 5,  '< 5 OTUs', Phylum))  %>% 
+  mutate(Phylum = case_when(
+    Phylum == 'Firmicutes' ~ 'Bacillota',
+    Phylum == 'Bacteroidetes' ~ 'Bacteroidota',
+    Phylum == 'Actinobacteria' ~ 'Actinomycetota',
+    Phylum == 'Proteobacteria' ~ 'Pseudomonadota',
+    Phylum == 'Bacteria_unclassified' ~ 'unclassified Bacteria',
+    Phylum == 'Fusobacteria' ~ 'Fusobacterium',
+    Phylum == 'Lentisphaerae' ~ 'Lentisphaerota',
+    Phylum == 'Synergistetes' ~ 'Synergistota',
+    Phylum == 'Tenericutes' ~ 'Mycoplasmatota',
+    Phylum == 'TM7' ~ 'Saccharibacteria',
+    Phylum == 'Verrucomicrobia' ~ 'Verrucomicrobiota',
+    Phylum == 'Deferribacteres' ~ 'Deferribacterota',
+    TRUE ~ Phylum ))
+
+unique(no_abund$Phylum)
+no_abund$Phylum <- factor(no_abund$Phylum, levels = c('Bacillota', 'Bacteroidota', 'Actinomycetota', 'Pseudomonadota', 'Verrucomicrobiota',
+                                                        'Saccharibacteria', 'Lentisphaerota', 'Fusobacterium', 'unclassified Bacteria', '< 5 OTUs'))
+
+
+no_plot <- no_abund %>%  
+  ggplot(aes(x = kit, y = sum, fill = Phylum)) +
+  geom_col() +
+  labs(x = '', y = '# OTUs')
+no_plot
+
+ggarrange(conc_plot + labs(tag = 'A'),  kits + labs(tag = 'B'), 
+          shannon + labs(tag = 'C'), no_plot + labs(tag = 'D'),
           nrow = 2, ncol = 2)
-ggsave('out/kit_comparison/kit_comparison.png', dpi = 600) 
+ggsave('out/kit_comparison/kit_comparison_AM.png', dpi = 600) 
 
 
 
