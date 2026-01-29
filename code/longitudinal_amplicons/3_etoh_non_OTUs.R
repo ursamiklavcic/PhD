@@ -8,7 +8,7 @@ library(ggpubr)
 library(scales)
 
 set.seed(96)
-theme_set(theme_bw())
+theme_set(theme_bw(base_size=14))
 
 otutab <- readRDS('data/longitudinal_amplicons/otutab_ethanol_bulk.RDS')
 taxtab <- readRDS('data/longitudinal_amplicons/taxtab.RDS')
@@ -267,13 +267,13 @@ prevalence <- long %>%
   mutate(prevalence = (timepoints_present / all_timepoints) * 100) %>%
   filter(prevalence > 0) %>% 
   # Calculate number of OTUs per person x treatment x Phylum
-  group_by(is_ethanol_resistant, person, Phylum, prevalence) %>%
+  group_by(is_ethanol_resistant, person, Phylum, timepoints_present) %>%
   reframe(n_otus = sum(prevalence > 0)) %>% 
   unique() 
 
 # Median lines per Phylum as well
 prevalence2 <- prevalence %>%
-  group_by(is_ethanol_resistant, Phylum, prevalence) %>%
+  group_by(is_ethanol_resistant, Phylum, timepoints_present) %>%
   reframe(median_n_otus = median(n_otus))
 
 prevalence$Phylum <- factor(prevalence$Phylum, levels = c('Bacillota', 'Bacteroidota',  
@@ -282,7 +282,7 @@ prevalence$Phylum <- factor(prevalence$Phylum, levels = c('Bacillota', 'Bacteroi
 
 # Plot
 preval <- prevalence %>%  
-  ggplot(aes(x = prevalence, y = n_otus)) +
+  ggplot(aes(x = timepoints_present, y = n_otus)) +
   geom_point(data = prevalence %>% filter(is_ethanol_resistant == 'Ethanol-resistant'),
              aes(group = interaction(person, Phylum)),
              color = '#f0a336', size = 1.2, alpha = 0.3) +
@@ -290,13 +290,13 @@ preval <- prevalence %>%
              aes(group = interaction(person, Phylum)),
              color = '#3CB371', size = 1.2, alpha = 0.3) +
   geom_smooth(data = prevalence2,
-              mapping = aes(x = prevalence, y = median_n_otus, color = is_ethanol_resistant),
+              mapping = aes(x = timepoints_present, y = median_n_otus, color = is_ethanol_resistant),
               linewidth = 1.4, se = FALSE) +
   facet_wrap(~Phylum, nrow = 1, scales = 'free_y') +  
   scale_color_manual(values = col2) +
-  labs(x = 'Within-individual prevalence [% of timepoints present]',
+  scale_x_continuous(breaks = c(0, 2, 4, 6, 8, 10,12, 14)) +
+  labs(x = 'Within-individual prevalence\n[number of timepoints an OTU was present]',
        y = '# OTUs') +
-  theme_bw(base_size = 14) +
   theme(legend.position = 'none',
         plot.margin = unit(c(0, 0.5, 0, 0), "cm"))
 preval
@@ -310,6 +310,7 @@ ggarrange(tile_per_rel, preval + labs(tag = 'D'),
           heights = c(1, .7), ncol = 1, common.legend = FALSE)
 
 ggsave('out/longitudinal_amplicons/OTU_composition_abundance.png', dpi = 600)
+ggsave('out/longitudinal_amplicons/OTU_composition_abundance.svg', dpi = 600)
 
 # Statistics for prevalence 
 stat <- long %>% 

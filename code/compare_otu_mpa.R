@@ -73,7 +73,9 @@ all <- full_join(otus, species,by = join_by('Group' == 'name')) %>%
   full_join(genus_meta, by = join_by('Group' == 'name')) %>% 
   full_join(genus_otu, by = 'Group') %>% 
   left_join(metadata, by = 'Group') %>% 
-  filter(!is.na(biota))
+  filter(!is.na(biota)) %>% 
+  mutate(biota = ifelse(biota == 'bulk microbiota', 'untreated sample', biota), 
+         biota = factor(biota, levels =c('untreated sample', 'ethanol treated sample'))) 
 
 
 all %>% ggplot(aes(x = otus, y = species, color = biota)) +
@@ -102,9 +104,11 @@ all %>% ggplot(aes(x = genus_otus, y = genus_meta, color = biota)) +
   scale_color_manual(values = c('#3CB371', '#f0a336')) +
   facet_wrap(~biota, scales = 'free') +
   geom_abline()+  
+  #scale_x_continuous(limits = c(50, 200)) +
+  #scale_y_continuous(limits = c(50, 200)) +
   labs(x = '# genera / sample\n [shotgun metagenomic data]', y = '# genera / sample\n [amplicon data]',  color = '') +
   theme(legend.position = 'none')
-ggsave('out/compare_genera.png')
+ggsave('out/compare_genera_original.png', dpi = 600)
 
 # Compare relative abundance 
 # col_phylum = c('#1F77B4', '#FF7F0E',  '#2CA02C',  '#D62728', '#9467BD', '#8C564B', '#f4d03f', 

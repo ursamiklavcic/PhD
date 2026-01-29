@@ -11,7 +11,7 @@ library(ggpubr)
 library(vegan)
 
 set.seed(96)
-theme_set(theme_bw(base_size = 15))
+theme_set(theme_bw(base_size = 14))
 
 col <- c('#3CB371', '#f0a336')
 col2 <- c('#A7E2C1', '#F7CD92')
@@ -175,7 +175,9 @@ no <- abund3 %>%
             position = position_dodge(width = 0.9), hjust = -0.1) +
   scale_fill_manual(values = col) +
   labs(x = '# Species', y = '', fill = '') +
-  theme(legend.position = 'bottom')
+  theme_bw(base_size=14) +
+  theme(legend.position = 'bottom') 
+  
 no
 ggsave('out/sporulation/SNS_N_species.png')
 

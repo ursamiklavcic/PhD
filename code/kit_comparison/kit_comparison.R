@@ -12,7 +12,7 @@ library(scales)
 library(ggpubr)
 
 set.seed(96)
-theme_set(theme_bw(base_size=14))
+theme_set(theme_bw(base_size=15))
 
 
 # Exploration
@@ -169,7 +169,7 @@ conc_plot <- ggplot(conc, mapping = aes(x=Protocol, y=Concentration, fill=Protoc
                                         # ,c('FastDNA', 'NucleoSpin'), c('FastDNA', 'DNAeasy'), c('NucleoSpin', 'DNAeasy')
                                         )) +
   scale_fill_manual(values = col_kit) +
-  labs(x='', y="DNA concentration (ng/µl)", color="") +
+  labs(x='', y="DNA concentration (ng/µl)") +
   theme(legend.position = 'none') 
 conc_plot
 ggsave('kit_comparison/plots/DNA_concentrations.png', dpi=600)
@@ -343,7 +343,7 @@ no_plot
 
 ggarrange(conc_plot + labs(tag = 'A'),  kits + labs(tag = 'B'), 
           shannon + labs(tag = 'C'), no_plot + labs(tag = 'D'),
-          nrow = 2, ncol = 2)
+          nrow = 2, ncol = 2) 
 ggsave('out/kit_comparison/kit_comparison_AM.png', dpi = 600) 
 
 
