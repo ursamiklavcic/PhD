@@ -85,7 +85,8 @@ ggplot(virus4, aes(x = day, y = sum)) +
 ggsave('out/geNomad/sumTPM_viruses_Caudoviricetes.png')
 
 
-virus_tab <- select(virus, seq_name, TPM, samples) %>% 
+virus_tab <- filter(virus, biota == 'bulk microbiota') %>% 
+  select(seq_name, TPM, samples) %>% 
   pivot_wider(names_from = 'seq_name', values_from = 'TPM', values_fill = 0) %>% 
   filter(!is.na(samples)) %>% 
   column_to_rownames('samples')
@@ -100,9 +101,9 @@ dist_meta = nmds_positions %>%
   left_join(metadata, by = 'Group')
 
 dist_meta %>%
-  ggplot(aes(x=NMDS1, y=NMDS2, color=person, shape = biota)) +
+  ggplot(aes(x=NMDS1, y=NMDS2, color=person)) +
   geom_point(size = 5) +
-  labs(color = 'Individual', shape = '') +
+  labs(color = 'Individual') +
   theme(legend.position = 'bottom')
 ggsave('out/geNomad/nmds.png')
 
