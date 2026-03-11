@@ -35,11 +35,18 @@ cole <- '#f0a336'
 metadata <- read.table('~/projects/longitudinal_shotgun/data/metadata.csv', header= TRUE, sep = ';') %>%
   mutate(date = dmy(date))
 
-abund <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', comment = '#') %>%
-  rename_with(~ str_remove(., '^profiled_'), starts_with('profiled_')) %>%
-  #mutate(clade_name = str_remove_all(clade_name, '[a-zA-Z]__')) %>%
-  separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species', 'SGB'),
-             sep="\\|") %>% 
+sporulation_ability <- read.table('data/sporulation_ability/sporulation_ability2021.tsv', sep = '\t', header =T)
+etoh_species <- read.table('data/longitudinal_shotgun/ethanol_resistant_species.tsv', sep = '\t', header =T)
+
+bacteria <- read_metaphlan_table('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', kingdom = "k__Bacteria", 
+                              lvl = 7, normalize = TRUE) %>% 
+  rownames_to_column('name') %>% 
+  pivot_longer(names_to = 'clade_name', values_to = 'value', cols = starts_with('k__')) %>% 
+  mutate(name = str_remove_all(name, 'profiled_')) %>% 
+  filter(name != 'MC013') %>% 
+  left_join(metadata, by = join_by('name' == 'Group')) %>% 
+  tidyr::separate_wider_delim(clade_name, delim = ".",
+                              names = c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species')) %>%  
   mutate(Phylum = ifelse(Phylum == 'p__Firmicutes', 'p__Bacillota', Phylum), 
          Domain = str_remove_all(Domain, 'k__'), 
          Phylum = str_remove_all(Phylum, 'p__'), 
@@ -48,8 +55,10 @@ abund <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_tabl
          Family = str_remove_all(Family, 'f__'), 
          Genus = str_remove_all(Genus, 'g__'), 
          Species = str_remove_all(Species, 's__'), 
-         SGB = str_remove_all(SGB, 't__')) %>% 
-  select(-MC013)
+         Species = str_replace_all(Species, '_', ' ')) %>% 
+  left_join(select(sporulation_ability, PA, n_genes, sporulation_ability, Species), by = 'Species') %>% 
+  left_join(select(etoh_species, Species, is_ethanol_resistant) %>%  
+              mutate(Species = str_replace_all(Species, '_', ' ')), by = 'Species')
 
 length(unique(filter(abund, Domain == 'Bacteria')$Species))
 
@@ -159,12 +168,9 @@ ggsave('out/metaphlan/eukaryota_species.png', dpi = 600)
 
 # Bacteria 
 # Phylum level 
-phylum <- filter(abund, is.na(Class), !is.na(Phylum), Domain == 'Bacteria') %>% 
-  select(-c(Domain, Class, Order, Family, Genus, Species, SGB)) %>% 
-  pivot_longer(-Phylum) %>%  
-  left_join(metadata, by = join_by('name' == 'Group')) 
 
-phylum %>%  
+
+bacteria %>%  
   group_by(biota) %>% 
   mutate(rel_abund = value /sum(value) * 100) %>% 
   ggplot(aes(x = biota, y = rel_abund, fill = Phylum)) +
@@ -173,13 +179,6 @@ phylum %>%
 ggsave('out/metaphlan/mpa_rel_abund_phylum.png', dpi = 600) 
 
 # how many species did we recover in each phylum 
-bacteria <- filter(abund, Domain == 'Bacteria', !is.na(Phylum), !is.na(Class), 
-                   !is.na(Order), !is.na(Family), !is.na(Genus), !is.na(Species), !is.na(SGB)) %>% 
-  pivot_longer(-c(Domain, Phylum, Class, Order, Family, Genus, Species, SGB)) %>% 
-  left_join(metadata, by = join_by('name' == 'Group')) %>% 
-  mutate(PA = ifelse(value > 0, 1, 0)) %>% 
-  filter(!is.na(biota))
-
 bacteria %>% 
   ggplot(aes(x = value, y = Phylum, fill = biota)) +
   geom_boxplot() + 
@@ -191,23 +190,22 @@ ggsave('out/metaphlan/rel_abund_phylum_boxplot.png')
 
 # For together
 rel <- bacteria %>%
-  ggplot(aes(x = value, y = Phylum, fill = biota)) +
+  filter(biota == 'untreated sample', !is.na(sporulation_ability)) %>% 
+  ggplot(aes(x = value, y = Phylum, fill = sporulation_ability)) +
   geom_boxplot() + 
   scale_x_log10() +
-  scale_fill_manual(values = col) +
   labs(x = 'Relative abundance [log10]', y = '', fill = '') +
   theme(legend.position = 'bottom',  axis.text.y=element_blank(), axis.ticks.y=element_blank())
 rel
 
 no <- bacteria %>%
-  filter(PA == 1) %>% 
-  group_by(biota, Phylum) %>% 
+  filter(biota == 'untreated sample', !is.na(sporulation_ability), value > 0) %>% 
+  group_by(sporulation_ability, Phylum) %>% 
   reframe(sum = n_distinct(Species)) %>% 
-  ggplot(aes(x = sum, y = Phylum, fill = biota)) +
+  ggplot(aes(x = sum, y = Phylum, fill = sporulation_ability)) +
   geom_col(position = position_dodge(width = 0.9)) +
   geom_text(aes(label = sum),
     position = position_dodge(width = 0.9), hjust = -0.1) +
-  scale_fill_manual(values = col) +
   labs(x = '# Species', y = '', fill = '') +
   theme(legend.position = 'bottom')
 no
@@ -217,7 +215,7 @@ ggsave('out/metaphlan/n_species_phylum.png')
 ggarrange(no + labs(tag = 'A'), rel + labs(tag = 'B'), 
           common.legend = TRUE, legend = 'bottom', 
           widths = c(1, .7))
-ggsave('out/metaphlan/mpa_number_species_relabund.png')
+ggsave('out/metaphlan/mpa_number_species_relabund.svg', dpi=600)
 
 # Alpha diversity 
 n <- filter(bacteria, value > 0) %>% 

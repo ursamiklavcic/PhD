@@ -171,6 +171,7 @@ unique_time <- amr_simplyfied %>%
   geom_line(linewidth = 1, aes(color  = Class)) +
   facet_wrap(~person, scales = 'free_y') +
   labs(y = 'TPM [log10]', x = 'Day', color = 'Class of ARG', fill = 'Event type') 
+unique_time
 ggsave('out/ARGs/AMRf_extreme_event_TPM.png')
 
 # Number of different ARGs per individual through time 
@@ -226,6 +227,7 @@ unique_tax <- amr_tax %>%
   #scale_fill_manual(values = c('#d94343', '#0c9910','#3472b7', '#b73485', '#f1f011', 'lightgrey' )) +
   theme(legend.position = 'bottom') +
   labs(y = '', x = '# unique ARGs')
+unique_tax
 ggsave('out/ARGs/AMRf_taxonomy_class_unique_simple.png')
 
 # Which phylum has the highest abundance of ARGs? 
@@ -234,9 +236,11 @@ tpm_tax <- amr_tax %>%
   reframe(TPM = sum(TPM)) %>%  
   ggplot(aes (x = TPM, y = Phylum, fill = Class)) +
   geom_col() +
+  scale_x_log10() +
   #scale_fill_manual(values = c('#d94343', '#0c9910','#3472b7', '#b73485', '#f1f011', 'lightgrey' )) +
   theme(legend.position = 'bottom', axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
-  labs(y = '')
+  labs(y = '', x = 'TPM [log10]')
+tpm_tax
 ggsave('out/ARGs/AMRf_taxonomy_class_TPM_simple_unique.png')
 
 ggarrange(unique_tax +labs(tag = 'A'), tpm_tax + labs(tag = 'B'), 

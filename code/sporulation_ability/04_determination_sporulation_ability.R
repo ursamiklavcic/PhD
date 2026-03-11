@@ -8,6 +8,8 @@ library(ggplot2)
 library(stringr)
 library(tibble)
 library(purrr)
+library(lubridate)
+library(microbiomics)
 
 set.seed(96)
 theme_set(theme_bw(base_size = 14))
@@ -18,44 +20,46 @@ cole <- '#f0a336'
 
 # Import results from code/sporulation_ability/03_sporeability.sh
 
-blast_results <- read.table('data/sporulation_ability/mpa_blast_results.tsv', sep = '\t', header = TRUE) %>% 
+blast_results <- read.table('~/projects/thesis/data/sporulation_ability/mpa_blast_results.tsv', sep = '\t', header = TRUE) %>% 
   mutate(genome_id = substr(genome_id, 1, 15)) %>% 
   rename('locus_tag' = 'gene_name')
 
 # Sporulation genes info (weight etc)
-gene_info <- read.table('data/sporulation_ability/gene_info.csv', sep = ';', header = TRUE) %>% 
+gene_info <- read.table('~/projects/thesis/data/sporulation_ability/gene_info.csv', sep = ';', header = TRUE) %>% 
   select(locus_tag, gene_name, weight)
 
 # Import results from 02_find_genomes_from_species.sh
-genome_info <- read.table('data/sporulation_ability/mpa_accession_manual.tsv', sep = '\t', header = TRUE)
+genome_info <- read.table('~/projects/thesis/data/sporulation_ability/mpa_accession_manual.tsv', sep = '\t', header = TRUE)
 
-metadata <- read.table('../longitudinal_shotgun/data/metadata.csv', sep = ';', header = TRUE) %>%  
-  mutate(date = dmy(date))
+metadata <- read.table('~/projects/thesis/data/metadata.csv', sep = ';', header = TRUE) %>%  
+  mutate(date = dmy(date), 
+         biota = ifelse(biota == 'bulk microbiota', 'untreated sample', 'ethanol treated sample'))
 
 
-abund <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', comment = '#') %>%
-  rename_with(~ str_remove(., '^profiled_'), starts_with('profiled_')) %>% 
-  pivot_longer(-clade_name) %>% 
-  filter(grepl('s__', clade_name), !grepl('t__', clade_name)) 
-# mutate(clade_name = str_remove_all(clade_name, '[a-zA-Z]__')) %>%
-# separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species', 'SGB'),
-#          sep="\\|") %>% 
-# mutate(Phylum = ifelse(Phylum == 'p__Firmicutes', 'p__Bacillota', Phylum), 
-#        Domain = str_remove_all(Domain, 'k__'), 
-#        Phylum = str_remove_all(Phylum, 'p__'), 
-#        Class = str_remove_all(Class, 'c__'), 
-#        Order = str_remove_all(Order, 'o__'), 
-#        Family = str_remove_all(Family, 'f__'), 
-#        Genus = str_remove_all(Genus, 'g__'), 
-#        Species = str_remove_all(Species, 's__'), 
-#        SGB = str_remove_all(SGB, 't__')) 
-
+abund <- read_metaphlan_table('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', kingdom = "k__Bacteria", 
+                              lvl = 7, normalize = TRUE) %>% 
+  rownames_to_column('name') %>% 
+  pivot_longer(names_to = 'clade_name', values_to = 'value', cols = starts_with('k__')) %>% 
+  mutate(name = str_remove_all(name, 'profiled_')) %>% 
+  # tidyr::separate_wider_delim(tax, delim = ".",
+  #                             names = c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species')) %>% 
+  # mutate(Phylum = ifelse(Phylum == 'p__Firmicutes', 'p__Bacillota', Phylum), 
+  #        Domain = str_remove_all(Domain, 'k__'), 
+  #        Phylum = str_remove_all(Phylum, 'p__'), 
+  #        Class = str_remove_all(Class, 'c__'), 
+  #        Order = str_remove_all(Order, 'o__'), 
+  #        Family = str_remove_all(Family, 'f__'), 
+  #        Genus = str_remove_all(Genus, 'g__'), 
+  #        Species = str_remove_all(Species, 's__')) %>% 
+  filter(name != 'MC013') %>% 
+  left_join(metadata, by = join_by('name' == 'Group'))
 
 # Sporulation ability based on Browne et al. 2017
 blastpre <- blast_results %>% 
   left_join(genome_info, by = 'genome_id', relationship = 'many-to-many') %>% 
   left_join(gene_info, by = 'locus_tag', relationship = 'many-to-many') %>% 
   filter(evalue < 10e-5 & identity > 30) 
+
 
 blast <- blastpre %>% 
   group_by(genome_id, clade_name) %>% 
@@ -110,10 +114,14 @@ gene_counts %>%
   #facet_wrap(~Family, scales = 'free_y')
 ggsave('out/sporulation/spore_genes_family.png', width = 29, height = 15, units = 'cm')
 
-spore_ability <- blastpre %>% 
+spore_ability <- blast_results %>% 
+  left_join(genome_info, by = 'genome_id', relationship = 'many-to-many') %>% 
+  left_join(gene_info, by = 'locus_tag', relationship = 'many-to-many') %>% 
+  filter(evalue < 10e-5 & identity > 30) %>% 
+  select(-Species) %>% 
   separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species'), sep="\\|") %>% 
   group_by(genome_id) %>% 
-  reframe(PA = any(gene_name == 'spo0A'), 
+  reframe(PA = any(locus_tag == 'CD630_RS06755'), 
           n_genes = n_distinct(locus_tag)) %>% 
   mutate(sporulation_ability = ifelse(PA == TRUE & n_genes  >= 33,  "Spore-former",  "Non-spore-former"))
 
@@ -135,14 +143,15 @@ write.table(sporulation_ability, file='data/sporulation_ability/sporulation_abil
 
 ### 
 # 
-abund2 <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', comment = '#') %>%
-  rename_with(~ str_remove(., '^profiled_'), starts_with('profiled_')) %>%
-  filter(grepl('s__', clade_name), !grepl('t__', clade_name)) %>% 
-  left_join(select(sporulation_ability, n_genes, PA, sporulation_ability, clade_name), by = 'clade_name') %>% 
-  pivot_longer(-c(clade_name, PA, n_genes, sporulation_ability)) %>% 
-  #mutate(clade_name = str_remove_all(clade_name, '[a-zA-Z]__')) %>%
-  separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species'),
-           sep="\\|") %>% 
+abund2 <- read_metaphlan_table('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', kingdom = "k__Bacteria", 
+                               lvl = 7, normalize = TRUE) %>% 
+  rownames_to_column('name') %>% 
+  pivot_longer(names_to = 'clade_name', values_to = 'value', cols = starts_with('k__')) %>% 
+  mutate(name = str_remove_all(name, 'profiled_')) %>% 
+  filter(name != 'MC013') %>% 
+  left_join(metadata, by = join_by('name' == 'Group')) %>% 
+  tidyr::separate_wider_delim(clade_name, delim = ".",
+                              names = c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species')) %>%  
   mutate(Phylum = ifelse(Phylum == 'p__Firmicutes', 'p__Bacillota', Phylum), 
          Domain = str_remove_all(Domain, 'k__'), 
          Phylum = str_remove_all(Phylum, 'p__'), 
@@ -150,19 +159,19 @@ abund2 <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_tab
          Order = str_remove_all(Order, 'o__'), 
          Family = str_remove_all(Family, 'f__'), 
          Genus = str_remove_all(Genus, 'g__'), 
-         Species = str_remove_all(Species, 's__')) %>% 
-  filter(name != 'MC013') %>% 
-  left_join(metadata, by = join_by('name' == 'Group'))
+         Species = str_remove_all(Species, 's__'), 
+         Species = str_replace_all(Species, '_', ' ')) %>% 
+  left_join(select(sporulation_ability, PA, n_genes, sporulation_ability, Species), by = 'Species')
 
 # How many species are undetermined for sporulation ability ? 
-length(unique(abund2$Species)) # 1033
-length(unique(filter(abund2, is.na(sporulation_ability))$Species)) # 506
+length(unique(abund2$Species)) # 1027
+length(unique(filter(abund2, is.na(sporulation_ability))$Species)) # 500
 
-abund2 %>% filter(is.na(sporulation_ability), biota == 'bulk microbiota') %>% 
+abund2 %>% filter(is.na(sporulation_ability), biota == 'untreated sample') %>% 
   ggplot(aes(x = as.factor(day), y = value, fill = Phylum)) +
   geom_col() +
   facet_wrap(~person, scales = 'free') +
-  labs(x = 'Day', y = 'Relative abundance [%]', subtitle = 'Bulk microbiota')
+  labs(x = 'Day', y = 'Relative abundance [%]', subtitle = 'Untreated sample')
 ggsave('out/sporulation/SGBs_without_sporulation_determination.png')
 
 # SGB/Species that do not have sprulation ability determined represent from sa little
@@ -187,7 +196,7 @@ ggsave('out/sporulation/relative_abundance_NA.png')
 
 # Prevalence of undefined species 
 # plot % species on y, x 0 prevalence % 
-preval <- abund2 %>% filter(biota == 'bulk microbiota') %>% 
+preval <- abund2 %>% filter(biota == 'untreated sample') %>% 
   group_by(sporulation_ability, person, Phylum, Species) %>% 
   reframe(all_timepoints = n(), 
           timepoints_present = sum(value > 0),
@@ -289,3 +298,31 @@ na <- filter(genus_sporulation, is.na(`Spore-former`), is.na(`Non-spore-former`)
 #   mutate(spore_ability = ifelse(mean_score > 33 & modality == 'unimodal' & PA_family >=1, 'Spore-former', 'Non-spore-former'))
 
 # I have 527 spcies, for which I have determined sporulation ability! I will work with those! 
+
+
+# table for Aleksander 
+etoh_species <- read.table('~/projects/thesis/data/longitudinal_shotgun/ethanol_resistant_species.tsv', sep = '\t', header=T)
+
+aleksander_table <- select(blastpre, -Species) %>%  
+  tidyr::separate_wider_delim(clade_name, delim = "|",
+                              names = c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species')) %>%
+  mutate(Phylum = ifelse(Phylum == 'p__Firmicutes', 'p__Bacillota', Phylum),
+         Domain = str_remove_all(Domain, 'k__'),
+         Phylum = str_remove_all(Phylum, 'p__'),
+         Class = str_remove_all(Class, 'c__'),
+         Order = str_remove_all(Order, 'o__'),
+         Family = str_remove_all(Family, 'f__'),
+         Genus = str_remove_all(Genus, 'g__'),
+         Species = str_remove_all(Species, 's__')) %>%
+  left_join(etoh_species, by = c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species'), relationship = 'many-to-many') %>%  
+  left_join(sporulation_ability, by = 'genome_id', relationship = 'many-to-many')
+write_tsv(aleksander_table, 'aleksander_table.tsv')
+
+aleksander_table %>% group_by(is_ethanol_resistant, sporulation_ability) %>% 
+  reframe(n = n_distinct(genome_id))
+
+aleksander_table %>% group_by(PA) %>% 
+  reframe(n = n_distinct(genome_id))
+
+length(unique(aleksander_table$genome_id))
+

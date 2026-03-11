@@ -106,7 +106,7 @@ all %>% ggplot(aes(x = genus_otus, y = genus_meta, color = biota)) +
   geom_abline()+  
   #scale_x_continuous(limits = c(50, 200)) +
   #scale_y_continuous(limits = c(50, 200)) +
-  labs(x = '# genera / sample\n [shotgun metagenomic data]', y = '# genera / sample\n [amplicon data]',  color = '') +
+  labs(x = '# genera / sample\n [amplicon data]', y = '# genera / sample\n [shotgun metagenomic data]',  color = '') +
   theme(legend.position = 'none')
 ggsave('out/compare_genera_original.png', dpi = 600)
 
@@ -313,8 +313,9 @@ mpa_long$Phylum <- factor(mpa_long$Phylum, levels = c('Bacillota', 'Bacteroidota
                                                       'Mycoplasmatota', 'Cyanobacteria', 'Verrucomicrobiota','< 0.1%'))
 
 rel_both <- otu_long %>%  mutate(data = 'Amplicon data') %>% 
-  rbind(mpa_long %>%  mutate(data = 'Shotgun data', 
-                             biota = ifelse(biota == 'bulk microbiota', 'Bulk microbiota', 'Ethanol treated sample')))
+  rbind(mpa_long %>%  mutate(data = 'Shotgun data')) %>% 
+  mutate(biota = ifelse(biota == 'bulk microbiota', 'untreated sample', biota), 
+         biota = factor(biota, levels = c('untreated sample', 'ethanol treated sample')))
 
 ggplot(rel_both, aes(x = data, y = rel, fill = Phylum)) +
   geom_col() +

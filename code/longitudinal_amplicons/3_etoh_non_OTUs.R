@@ -23,7 +23,7 @@ col2 <- c('#3CB371', '#f0a336')
 # Define ethanol resistant OTUs and seqs! 
 otu_long <- norm_rel %>% 
   mutate(PA = ifelse(value > 0, 1, 0)) %>%
-  left_join(metadata %>% select(Group, person, date), by = 'Group') %>%
+  left_join(metadata %>% select(Group, person, date, day), by = 'Group') %>%
   left_join(taxtab, by = 'name')
 
 # OTU that is ethanol resistant once is always ethanol resistant 
@@ -253,9 +253,10 @@ rel
 
 # plot % OTUs on y, x 0 prevalence % 
 unique(long$Phylum)
-group_by(long, Phylum) %>% 
+n_otus_phylum <- group_by(long, Phylum, is_ethanol_resistant) %>% 
   filter(PA == 1) %>% 
   reframe(n = n_distinct(name))
+n_otus_phylum
 
 prevalence <- long %>%
   filter(Phylum %in% c('unclassified Bacteria', 'Pseudomonadota', 'Actinomycetota', 'Bacteroidota', 'Bacillota')) %>% 
@@ -269,7 +270,8 @@ prevalence <- long %>%
   # Calculate number of OTUs per person x treatment x Phylum
   group_by(is_ethanol_resistant, person, Phylum, timepoints_present) %>%
   reframe(n_otus = sum(prevalence > 0)) %>% 
-  unique() 
+  left_join(n_otus_phylum, by = c('Phylum', 'is_ethanol_resistant')) %>% 
+  mutate(per_otus = (n_otus/n)*100)
 
 # Median lines per Phylum as well
 prevalence2 <- prevalence %>%
@@ -301,6 +303,58 @@ preval <- prevalence %>%
         plot.margin = unit(c(0, 0.5, 0, 0), "cm"))
 preval
 
+# Plot with percent OTUs per timepoitn 
+prevalence3 <- prevalence %>%
+  group_by(is_ethanol_resistant, Phylum, timepoints_present) %>%
+  reframe(mean_per_otus = mean(per_otus))
+
+prevalence %>%  
+  ggplot(aes(x = timepoints_present, y = per_otus)) +
+  geom_point(data = prevalence %>% filter(is_ethanol_resistant == 'Ethanol-resistant'),
+             aes(group = interaction(person, Phylum)),
+             color = '#f0a336', size = 1.2, alpha = 0.3) +
+  geom_point(data = prevalence %>% filter(is_ethanol_resistant == 'Ethanol non-resistant'),
+             aes(group = interaction(person, Phylum)),
+             color = '#3CB371', size = 1.2, alpha = 0.3) +
+  geom_smooth(data = prevalence3,
+              mapping = aes(x = timepoints_present, y = mean_per_otus, color = is_ethanol_resistant),
+              linewidth = 1.4, se = FALSE) +
+  facet_wrap(~Phylum, nrow = 1, scales = 'free_y') +  
+  scale_color_manual(values = col2) +
+  scale_x_continuous(breaks = c(0, 2, 4, 6, 8, 10,12, 14)) +
+  labs(x = 'Within-individual prevalence\n[number of timepoints an OTU was present]',
+       y = 'Percentage of OTUs present in a timepoint out of either ethanol resistant or non resistant OTUs in this Phylum') +
+  theme(legend.position = 'none',
+        plot.margin = unit(c(0, 0.5, 0, 0), "cm"))
+
+# Pravilni graf ki pokaze to kar želim, je torej: 
+box_prevalence <- long %>%
+  filter(Phylum %in% c('unclassified Bacteria', 'Pseudomonadota', 'Actinomycetota', 'Bacteroidota', 'Bacillota')) %>% 
+  mutate(time_point = as.integer(substr(Group, 3, 5))) %>%
+  group_by(is_ethanol_resistant, person, Phylum, name) %>%
+  reframe(timepoints_present = sum(PA == 1))
+
+box_prevalence$Phylum <- factor(box_prevalence$Phylum, levels = c('Bacillota', 'Bacteroidota',  
+                                                              'Actinomycetota','Pseudomonadota', 
+                                                              'unclassified Bacteria'))
+
+box_preval <- box_prevalence %>% filter(timepoints_present > 0) %>% 
+  ggplot(aes(x = is_ethanol_resistant, y = timepoints_present, fill = is_ethanol_resistant)) +
+  geom_boxplot() +
+  stat_compare_means() +
+  scale_fill_manual(values = col2) +
+  facet_wrap(~Phylum, nrow = 1, scales = 'free_y') +
+  scale_y_continuous(breaks = c(0, 2, 4, 6, 8, 10,12, 14)) +
+  labs(x = '', y = 'Number of timepoints an OTU was present', fill = '') +
+  theme(plot.margin = unit(c(t = 0, r = 0.5, b = 0, l = 0), "cm"),
+        axis.text.x = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        panel.grid.major = element_blank(), 
+        legend.position = 'none')
+  
+box_preval
+
+
 tile_per_rel <- ggarrange(tile + labs(tag = 'A'), per + labs(tag = 'B'), rel + labs(tag = 'C'), 
                           widths = c(.9, 1, 1), 
                           ncol =  3, common.legend = TRUE, legend = 'bottom', align = 'h')
@@ -309,8 +363,13 @@ tile_per_rel
 ggarrange(tile_per_rel, preval + labs(tag = 'D'), 
           heights = c(1, .7), ncol = 1, common.legend = FALSE)
 
-ggsave('out/longitudinal_amplicons/OTU_composition_abundance.png', dpi = 600)
+ggsave('out/longitudinal_amplicons/OTU_composition_abundance_v2.png', dpi = 600)
 ggsave('out/longitudinal_amplicons/OTU_composition_abundance.svg', dpi = 600)
+
+# Alternative 
+ggarrange(tile_per_rel, box_preval + labs(tag = 'D'), 
+          heights = c(1, 1), ncol = 1, common.legend = FALSE)
+ggsave('out/longitudinal_amplicons/OTU_composition_abundance_alternative_v2.svg', dpi = 600)
 
 # Statistics for prevalence 
 stat <- long %>% 

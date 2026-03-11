@@ -463,3 +463,79 @@ ggsave('out/sporulation/present_one_more_people.png', dpi = 600)
 ##
 # Ethanol resistant and spore-forming = active spore-formers who are they? 
 
+
+# How many spore-formers are in the ethanol-treated and untreated samples? 
+
+abund5 <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', comment = '#') %>%
+  rename_with(~ str_remove(., '^profiled_'), starts_with('profiled_')) %>%
+  mutate(clade_name2 = clade_name) %>% 
+  filter(grepl('s__', clade_name), !grepl('t__', clade_name)) %>% 
+  left_join(select(sporulation_ability, n_genes, PA, sporulation_ability, clade_name), by = 'clade_name') %>% 
+  pivot_longer(-c(clade_name, clade_name2, PA, n_genes, sporulation_ability)) %>% 
+  #mutate(clade_name = str_remove_all(clade_name, '[a-zA-Z]__')) %>%
+  separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species'),
+           sep="\\|") %>% 
+  mutate(Phylum = ifelse(Phylum == 'p__Firmicutes', 'p__Bacillota', Phylum), 
+         Domain = str_remove_all(Domain, 'k__'), 
+         Phylum = str_remove_all(Phylum, 'p__'), 
+         Class = str_remove_all(Class, 'c__'), 
+         Order = str_remove_all(Order, 'o__'), 
+         Family = str_remove_all(Family, 'f__'), 
+         Genus = str_remove_all(Genus, 'g__'), 
+         Species = str_remove_all(Species, 's__')) %>% 
+  filter(name != 'MC013') %>% 
+  left_join(metadata, by = join_by('name' == 'Group')) 
+
+
+abund5 %>% filter(sporulation_ability == 'Spore-former', value > 0) %>% 
+  group_by(biota) %>%  
+  reframe(n_spore = n_distinct(clade_name2))
+
+abund5 %>% filter(sporulation_ability == 'Non-spore-former', value > 0) %>% 
+  group_by(biota) %>%  
+  reframe(n_spore = n_distinct(clade_name2))
+
+abund5 %>%  filter(value > 0) %>% 
+  group_by(biota) %>%  
+  reframe(n = n_distinct(clade_name2))
+
+# What about relative abundance 
+abund5 %>% 
+  group_by(name, biota, person, day, sporulation_ability) %>%  
+  reframe(rel = sum(value)) %>%  
+  group_by(biota, sporulation_ability) %>% 
+  reframe(mean= mean(rel), 
+          sd = sd(rel))
+
+# Is there a statisticaly significant enrichment of spore-formers in the ethanol-treated samples?
+n_rel <- abund5 %>% 
+  mutate(sample = ifelse(biota == 'bulk microbiota', 'untreated sample', 'ethanol-treated sample')) %>%
+  mutate(pa = ifelse(value > 0, 1, 0)) %>% 
+  group_by(name, sporulation_ability, sample) %>% 
+  reframe(sum_n = sum(pa), 
+          sum_rel = sum(value)) %>% 
+  filter(sporulation_ability == 'Spore-former') %>% 
+  mutate(original_sample = substr(name, 2, 5)) %>% 
+  select(-name)
+
+n_rel2 <- filter(n_rel, sample == 'untreated sample') %>% 
+  left_join(filter(n_rel, sample == 'ethanol-treated sample'), by = 'original_sample') %>% 
+  filter(!is.na(sample.y))
+
+
+# Number of species detected
+wilcox.test(n_rel2$sum_n.x, n_rel2$sum_n.y, paired = TRUE, alternative = 'greater')
+# Wilcoxon signed rank test with continuity correction
+# 
+# data:  n_rel2$sum_n.x and n_rel2$sum_n.y
+# V = 3655, p-value = 5.913e-16
+# alternative hypothesis: true location shift is greater than 0
+
+
+# Relative abundance 
+wilcox.test(n_rel2$sum_rel.x, n_rel2$sum_rel.y, paired = TRUE, alternative = 'greater') 
+# Wilcoxon signed rank test with continuity correction
+# 
+# data:  n_rel2$sum_rel.x and n_rel2$sum_rel.y
+# V = 1125, p-value = 0.999
+# alternative hypothesis: true location shift is greater than 0
