@@ -187,8 +187,8 @@ tpm_time <- amr_simplyfied %>% filter(TPM > 0) %>%
   geom_line(linewidth=1, aes(color = Class)) +
   facet_wrap(~person, scales = 'free_y') +
   labs(y = '# unique genes', x = 'Day', color = 'Class of ARG', fill = 'Event type') 
+tpm_time
 ggsave('out/ARGs/AMRf_unique_class_ARG.png')
-
 
 ggarrange(unique_time + labs(tag = 'A'), 
           tpm_time + labs(tag = 'B'), 
@@ -282,22 +282,91 @@ amr_simplyfied %>%
   labs(x = 'Day', y = 'TPM [log10]', color = 'Class fo ARGs')
 ggsave('out/ARGs/tpm_time_Class.png')
 
-alpha <- readRDS('data/longitudinal_shotgun/alpha_diveristy.RDS')
+alpha <- readRDS('data/longitudinal_shotgun/alpha_diveristy.RDS') %>%  
+  filter(biota == 'bulk microbiota')
 
 tpm_amr <- amr_simplyfied %>%
-  group_by(person, time_point, date, Class) %>%
+  filter(TPM > 0) %>% 
+  group_by(Group, person, Class) %>%
   reframe(TPM = sum(TPM), 
           unique = n_distinct(ARG))
 
-amr_alpha <- select(alpha, name, richness, shannon, person, date, time_point) %>% 
-  right_join(tpm_amr, by = c('person', 'date', 'time_point'))
+amr_alpha <- select(alpha, name, richness, shannon, evenness, date) %>% 
+  full_join(tpm_amr, by = join_by('name' == 'Group'))
 
 amr_alpha %>% 
-  ggplot(aes(x = shannon, y = TPM)) +
-  geom_smooth(se = F) +
-  geom_point(size = 2, aes(color = Class)) +
+  ggplot(aes(x = shannon, y = TPM, color = Class)) +
+  geom_point(size = 2) +
   facet_wrap(~person, scales = 'free')
 ggsave('out/ARGs/tpm_shannon.png')
+
+# Matrix of correlations between Shannon and abundance of ARGs 
+cor_data <- amr_alpha %>%
+  group_by(person, Class) %>%
+  reframe(cor_shannon_tpm = cor.test(shannon, TPM, method = "pearson")$p.value,
+          cor_shannon_unique = cor.test(shannon, unique, method = "pearson")$p.value)
+
+ggplot(amr_alpha, aes(x = shannon, y = TPM)) +
+  geom_point(aes(color = person)) +
+  geom_smooth(method = 'lm') +
+  stat_cor(label.y.npc = 'top', method = 'spearman') +
+  facet_wrap(~Class, scales = 'free_y') +
+  labs(x = 'Shannon', y = 'TPM [log10]', color = 'Individual')
+ggsave('out/ARGs/correlation_abundanceARG_shannon.svg', dpi = 600)
+
+ggplot(cor_data, aes(x = person, y = Class, fill = cor_shannon_tpm)) +
+  geom_tile() +
+  geom_text(aes(label = sprintf("%.3f", cor_shannon_tpm))) +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0.1, limits = c(0, 1)) + 
+  labs(fill = "Pearson\n correlation", x = "Individual", y = '', 
+       title = 'Correlation between Shannon diversity and abundance of an ARG class') 
+ggsave('out/ARGs/correlation_matrix_abundanceARG_shannon.png', dpi=600)
+
+# cor.test(filter(amr_alpha, person == 'A')$shannon, filter(amr_alpha, person == 'A')$TPM, method = 'pearson')$p.value
+
+# Matrix shannon and diveristy of ARGs 
+ggplot(amr_alpha, aes(x = shannon, y = unique)) +
+  geom_point(aes(color = person)) +
+  geom_smooth(method = 'lm') +
+  stat_cor(label.y.npc = 'bottom', method = 'spearman') +
+  scale_y_log10() +
+  facet_wrap(~Class) +
+  labs(x = 'Shannon', y = '# unique ARGs', color = 'Individual')
+ggsave('out/ARGs/correlation_diversityARG_shannon.svg', dpi=600)
+
+ggplot(cor_data, aes(x = person, y = Class, fill = cor_shannon_unique)) +
+  geom_tile() +
+  geom_text(aes(label = sprintf("%.3f", cor_shannon_unique))) +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0.1, limits = c(0, 1)) + 
+  labs(fill = "Pearson\n p-value", x = "Individual", y = '', 
+       title = 'Correlation between Shannon diversity and ARG diveristy') 
+ggsave('out/ARGs/correlation_matrix_diversityARG_shannon.png', dpi=600)
+
+# For all ARGs together = inflating statistics! 
+amr_group <- amr_simplyfied %>%
+  filter(TPM > 0) %>% 
+  group_by(Group, person) %>%
+  reframe(TPM = sum(TPM), 
+          unique = n_distinct(ARG))
+
+alpha_amr_2 <- select(alpha, name, richness, shannon, evenness, date) %>% 
+  full_join(amr_group, by = join_by('name' == 'Group'))
+
+ggplot(alpha_amr_2, aes(x = shannon, y = TPM)) +
+  geom_point(aes(color = person)) +
+  geom_smooth(method = 'lm') +
+  stat_cor(label.y.npc = 'top', method = 'pearson') +
+  facet_wrap(~person, scales = 'free') +
+  labs(x = 'Shannon', y = 'TPM of all ARGs [log10]', color = 'Individual')
+ggsave('out/ARGs/all_ARG_abundance_shannon.png', dpi = 600)
+
+ggplot(alpha_amr_2, aes(x = shannon, y = unique)) +
+  geom_point(aes(color = person)) +
+  geom_smooth(method = 'lm') +
+  stat_cor(label.y.npc = 'top', method = 'pearson') +
+  facet_wrap(~person, scales = 'free') +
+  labs(x = 'Shannon', y = '# unique ARGs', color = 'Individual')
+ggsave('out/ARGs/all_ARG_diversity_shannon.png', dpi = 600)
 
 # CTX-M1
 amr %>% filter(ARG == 'blaCTX-M-1') %>% 
