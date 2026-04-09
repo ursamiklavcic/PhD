@@ -18,7 +18,8 @@ theme_set(theme_bw(base_size = 14))
 
 otutab <- readRDS('data/longitudinal_amplicons/otutab_ethanol_bulk.RDS')
 taxtab <- readRDS('data/longitudinal_amplicons/taxtab.RDS')
-
+metadata <- read.table('data/metadata.csv', sep = ';', header = T) %>% 
+  mutate(biota = ifelse(biota == 'bulk microbiota', 'untreated sample', biota))
 
 otu_long <- pivot_longer(as.data.frame(otutab) %>%  rownames_to_column('Group'), cols = starts_with('Otu')) %>%  
   left_join(taxtab, by = 'name')
@@ -192,6 +193,45 @@ ggsave('out/alpha_otu_mpa.svg', dpi = 600)
 
 
 # Richness and evenness
+alpha_long <- rbind(alpha_mpa %>%  mutate(sample = 'Metagenomics'), alpha_otu %>% 
+                      rename(name = Group, richness = S.obs) %>% 
+                      select(name, richness, evenness, shannon) %>% 
+                      mutate(sample = '16 AS')) %>% 
+  left_join(metadata, by = join_by('name' == 'Group'))
+
+# Correlation by person? 
+richness_plot <- alpha_long %>%  
+  filter(biota == 'untreated sample') %>% 
+  ggplot(aes(x=day, y=richness, color = sample)) +
+  geom_rect(data = events, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf, fill = extremevent_type), inherit.aes = FALSE,
+            alpha = 0.6) +
+  scale_fill_manual(values = c('white','#d94343', '#d98e43', '#f1f011', '#0c9910', '#3472b7', '#7934b7', '#b73485', '#0f5618')) +
+  scale_color_manual(values = c('skyblue', 'violet')) +
+  geom_line(linewidth=1.5) +
+  facet_wrap(~person, scales = 'free') +
+  labs(x='Day', y= 'Richness', color = 'Data', fill = 'Event', title = 'Richness') +
+  theme(legend.position = 'bottom')
+richness_plot
+
+evenness_plot <- alpha_long %>%  
+  filter(biota == 'untreated sample') %>% 
+  ggplot(aes(x=day, y=evenness, color = sample)) +
+  geom_rect(data = events, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf, fill = extremevent_type), inherit.aes = FALSE,
+            alpha = 0.6) +
+  scale_fill_manual(values = c('white','#d94343', '#d98e43', '#f1f011', '#0c9910', '#3472b7', '#7934b7', '#b73485', '#0f5618')) +
+  scale_color_manual(values = c('skyblue', 'violet')) +
+  geom_line(linewidth=1.5) +
+  facet_wrap(~person, scales = 'free') +
+  labs(x='Day', y= 'Evenness', color = 'Data', fill = 'Event', title = 'Evenness') +
+  theme(legend.position = 'bottom')
+evenness_plot
+
+ggarrange(richness_plot, evenness_plot, 
+          common.legend = TRUE, legend = 'bottom', 
+          ncol = 1)
+ggsave('out/compare_16s_meta/richness_evenness.svg')
+
+# 
 ggarrange(alpha %>% filter(!is.na(biota)) %>% 
             ggplot(aes(y = S.obs, x = richness,  color = biota)) +
             geom_point(size = 3) +
@@ -208,8 +248,35 @@ ggarrange(alpha %>% filter(!is.na(biota)) %>%
             facet_wrap(~biota, scales = 'free') +
             labs(y = 'Evenness [amplicon data]', x = 'Evenness [shotgun data]', tag = 'B') +
             theme(legend.position = 'none'), nrow = 2)
- ggsave('out/richness_evenntess_compare.png') 
+ggsave('out/richness_evenntess_compare.png') 
 
+
+# Plot for presentation 
+ggarrange(alpha %>% filter(biota == 'Bulk microbiota') %>% 
+            ggplot(aes(y = shannon.x, x = shannon.y)) +
+            geom_point(size = 3, aes(color = person)) +
+            geom_smooth(method = 'lm') +
+            stat_cor() +
+            labs(y = 'Shannon [16S amplicon data]', x = 'Shannon [metagenomic data]', title = 'Shannon') +
+            theme(legend.position = 'none'), 
+          alpha %>% filter(biota == 'Bulk microbiota') %>% 
+            ggplot(aes(y = evenness.x, x = evenness.y)) +
+            geom_point(size = 3, aes(color = person)) +
+            geom_smooth(method = 'lm') +
+            stat_cor() +
+            labs(y = 'Evenness [16S amplicon data]', x = 'Evenness [metagenomic data]', title = 'Evenness') +
+            theme(legend.position = 'none'), nrow = 2)
+
+ggsave('out/compare_16s_meta/richness_evenntess_compare.png') 
+
+alpha %>% filter(biota == 'Bulk microbiota') %>% 
+  ggplot(aes(y = shannon.x, x = shannon.y)) +
+  geom_point(size = 3, aes(color = person)) +
+  geom_smooth(method = 'lm') +
+  stat_cor() +
+  labs(y = 'Shannon [16S amplicon data]', x = 'Shannon [metagenomic data]') +
+  theme(legend.position = 'none')
+ggsave('out/compare_16s_meta/shannon_corr.png')
 
 # Beta diveristy 
 beta_mpa <- readRDS('data/longitudinal_shotgun/nmds_mpa_positions.rds')
@@ -229,7 +296,6 @@ nmds_otu <- beta_otu %>%
   ggplot(aes(x=NMDS1, y=NMDS2, color=person)) +
   geom_point(size = 5) +
   labs(color = 'Individual') +
-  labs(tag ='A') +
   guides(color = guide_legend(nrow = 1)) +
   theme(legend.position = "bottom")
 nmds_otu
@@ -247,13 +313,17 @@ nmds_mpa <- beta_mpa %>%
   ggplot(aes(x=NMDS1, y=NMDS2, color=person)) +
   geom_point(size = 5) +
   labs(color = 'Individual') +
-  labs(tag ='B') +
   guides(color = guide_legend(nrow = 1)) +
   theme(legend.position = "bottom")
 nmds_mpa
 
-ggarrange(nmds_otu, nmds_mpa, common.legend = T, legend = 'bottom') 
+ggarrange(nmds_otu + labs(tag ='A'), 
+          nmds_mpa + labs(tag ='B'), common.legend = T, legend = 'bottom') 
 ggsave('out/nmds_both.png')
+
+ggarrange(nmds_otu + labs(title ='16S amplicon sequencing'), 
+          nmds_mpa + labs(title ='Metagenomic sequencing'), common.legend = T, legend = 'bottom') 
+ggsave('out/compare_16s_meta/nmds_both_presentation.svg')
 
 # Relative abundance of bacteria for OTUs and MPA 
 otutab <- readRDS('data/longitudinal_amplicons/otutab_ethanol_bulk.RDS')
