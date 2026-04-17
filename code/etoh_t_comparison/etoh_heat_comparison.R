@@ -14,7 +14,10 @@ library(glue)
 library(ggpubr)
 
 set.seed(96)
-theme_set(theme_bw(base_size = 14))
+theme_set(theme_bw(base_size = 11) +
+            theme(plot.title   = element_text(size = 11),
+                  axis.title   = element_text(size = 11),
+                  axis.text    = element_text(size = 11)))
 
 # Exploration
 shared = read.table('data/etoh_h_comparison/mothur/stability.trim.contigs.good.unique.good.filter.unique.precluster.denovo.vsearch.pick.opti_mcc.shared', 
@@ -116,9 +119,7 @@ taxtab = read_tsv('data/etoh_h_comparison/mothur/stability.trim.contigs.good.uni
   mutate(taxonomy = str_replace_all(taxonomy, "\\\\|\\\"|\\(\\d+\\)", ""),
          taxonomy = str_replace(taxonomy, ";$", "")) %>%
   separate(taxonomy, into=c("Domain", "Phylum", "Class", "Order", "Family", "Genus"),
-           sep=";") %>%
-  mutate(Phylum = ifelse(Phylum %in% c('Firmicutes', 'Bacteroidetes', 'Actinobacteria', 'Proteobacteria',
-                                       'Verrucomicrobia','Bacteria_unclassified'), Phylum, 'Other')) %>%
+           sep=";") %>% 
   mutate(Phylum = case_when(
     Phylum == 'Firmicutes' ~ 'Bacillota',
     Phylum == 'Bacteroidetes' ~ 'Bacteroidota',
@@ -126,11 +127,12 @@ taxtab = read_tsv('data/etoh_h_comparison/mothur/stability.trim.contigs.good.uni
     Phylum == 'Proteobacteria' ~ 'Pseudomonadota',
     Phylum == 'Bacteria_unclassified' ~ 'unclassified Bacteria',
     Phylum == 'Verrucomicrobia' ~ 'Verrucomicrobiota', 
-    #Phylum == 'Lentisphaerae' ~ 'Lentisphaerota', 
-    #Phylum == 'Fusobacteria' ~ 'Fusobacteriota', 
-    # Phylum == 'Synergistetes' ~ 'Synergistota',
+    Phylum == 'Lentisphaerae' ~ 'Lentisphaerota', 
+    Phylum == 'Fusobacteria' ~ 'Fusobacteriota', 
+    Phylum == 'Synergistetes' ~ 'Synergistota',
     TRUE ~ Phylum ))
-saveRDS(taxtab, 'etoh_t_comparison/data/r_data/taxtab.RDS') 
+
+saveRDS(taxtab, 'data/etoh_h_comparison/r_data/taxtab.RDS') 
   
 unique(taxtab$Phylum)
 
@@ -155,7 +157,6 @@ col_phylum = c('#1F77B4', '#FF7F0E',  '#2CA02C',  '#D62728', '#9467BD', '#8C564B
 col_shock = c('#a569bd', '#27ae60', '#28a9d8')
 
 ################# DNA CONCENTRATIONS ########################
-metadata <- read_csv('data/etoh_h_comparison/metadata.csv')
 
 conc <- metadata %>% 
   group_by(treatment) %>%
@@ -205,7 +206,8 @@ otu_long <- as.data.frame(otutab) %>%
   left_join(taxtab, by = 'name')
 
 otu_long$Phylum <- factor(otu_long$Phylum, levels = c('Bacillota', 'Bacteroidota', 'Actinomycetota', 
-                                                      'Pseudomonadota','Verrucomicrobiota', 'unclassified Bacteria', 'Other'))
+                                                      'Pseudomonadota', 'Verrucomicrobiota', 
+                                                     'Lentisphaerota', 'Fusobacteriota', 'Synergistota','unclassified Bacteria', 'Other'))
 ###
 ## Cultivation experiment heat VS ethanol shock
 ###
@@ -279,7 +281,7 @@ filter(otu_cultivation, #treatment == c('cult_100', 'cult_70'),
   scale_y_log10() +
   #scale_x_continuous(breaks = c(1, 2, 5, 7,14)) +
   facet_grid(Phylum~ cultivation_media + bile_acids , scales = 'free_x', space = 'free_x') +
-  labs(x = 'Cultivation day', y = 'Relative abundance', shape = '', fill = '') +
+  labs(x = 'Cultivation day', y = 'Relative abundance', fill = '') +
   theme(legend.position = 'bottom')
 ggsave('out/etoh_h_comparison/relabund_otus_treatment.png')
 
@@ -583,13 +585,14 @@ ggsave('out/etoh_h_comparison/rel_abundEMA.png')
 otu_ema %>% 
   group_by(treatmentEMA, shock, Phylum, Group) %>%  
   reframe(sumPA = sum(PA)) %>% 
-  filter(!Phylum %in% c('Other', 'Verrucomicrobiota')) %>% 
+  filter(sumPA > 2) %>% 
+  #filter(!Phylum %in% c('Other', 'Verrucomicrobiota')) %>% 
   ggplot(aes(x = treatmentEMA, y = sumPA, fill = shock)) +
   #geom_point(size = 4) +
   geom_boxplot() +
   facet_wrap(~ Phylum, scales = 'free_y', ncol = 2) +
-  labs(y = '# OTUs', x = '', fill = '', color = '') +
-  theme(legend.position = 'bottom')
+  labs(y = '# OTUs', x = '', fill = '') +
+  theme(legend.position = 'bottom', strip.text = element_text(face = "italic"))
 ggsave('out/etoh_h_comparison/number_otus_EMA.png')
 ggsave('out/etoh_h_comparison/number_otus_EMA.svg')
 
@@ -602,7 +605,3 @@ ema_bray %>%
   #scale_color_manual(values = c('darkred', 'skyblue', 'gold3')) +
   labs(x = '', y='', color = 'Time of light \n incubation with EMA', shape = '')
 ggsave('out/etoh_h_comparison/bray_ema.png', dpi=600)
-
-
-
-
