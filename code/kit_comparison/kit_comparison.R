@@ -12,7 +12,10 @@ library(scales)
 library(ggpubr)
 
 set.seed(96)
-theme_set(theme_bw(base_size=15))
+theme_set(theme_bw(base_size = 12) +
+            theme(plot.title   = element_text(size = 12),
+                  axis.title   = element_text(size = 12),
+                  axis.text    = element_text(size = 12)))
 
 
 # Exploration
@@ -233,7 +236,7 @@ shannon <- ggplot(alpha_meta, mapping = aes(x=kit, y=shannon)) +
                                       c('FastDNA', 'Dneasy'), c('PowerFecal', 'Dneasy'), c('NucleoSpin', 'Dneasy'))) +
   scale_color_manual(values = col_human, name = "Individual") +
   scale_shape_manual(values = c(16, 17, 15), name = "Individual") +
-  labs(x='', y="Shannon", color="") +
+  labs(x='', y="Shannon's diversity index", color="") +
   theme(legend.position = 'bottom') 
 shannon
 
@@ -338,13 +341,14 @@ no_abund$Phylum <- factor(no_abund$Phylum, levels = c('Bacillota', 'Bacteroidota
 no_plot <- no_abund %>%  
   ggplot(aes(x = kit, y = sum, fill = Phylum)) +
   geom_col() +
-  labs(x = '', y = '# OTUs')
+  labs(x = '', y = '# OTUs') +
+  theme(legend.text = element_text(face =  'italic'))
 no_plot
 
 ggarrange(conc_plot + labs(tag = 'A'),  kits + labs(tag = 'B'), 
           shannon + labs(tag = 'C'), no_plot + labs(tag = 'D'),
           nrow = 2, ncol = 2) 
-ggsave('out/kit_comparison/kit_comparison_AM.png', dpi = 600) 
+ggsave('out/kit_comparison/kit_comparison.svg', dpi = 600) 
 
 
 
