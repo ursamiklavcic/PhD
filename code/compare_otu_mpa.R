@@ -12,7 +12,10 @@ library(stringr)
 library(readxl)
 
 set.seed(96)
-theme_set(theme_bw(base_size = 14))
+theme_set(theme_bw(base_size = 12) +
+            theme(plot.title   = element_text(size = 12),
+                  axis.title   = element_text(size = 12),
+                  axis.text    = element_text(size = 12)))
 
 # OTU data 
 
@@ -193,10 +196,10 @@ ggsave('out/alpha_otu_mpa.svg', dpi = 600)
 
 
 # Richness and evenness
-alpha_long <- rbind(alpha_mpa %>%  mutate(sample = 'Metagenomics'), alpha_otu %>% 
+alpha_long <- rbind(alpha_mpa %>%  mutate(sample = 'Metagenomic data'), alpha_otu %>% 
                       rename(name = Group, richness = S.obs) %>% 
                       select(name, richness, evenness, shannon) %>% 
-                      mutate(sample = '16 AS')) %>% 
+                      mutate(sample = '16S amplicon data')) %>% 
   left_join(metadata, by = join_by('name' == 'Group'))
 
 # Correlation by person? 
@@ -208,8 +211,9 @@ richness_plot <- alpha_long %>%
   scale_fill_manual(values = c('white','#d94343', '#d98e43', '#f1f011', '#0c9910', '#3472b7', '#7934b7', '#b73485', '#0f5618')) +
   scale_color_manual(values = c('skyblue', 'violet')) +
   geom_line(linewidth=1.5) +
+  geom_point(size = 2) +
   facet_wrap(~person, scales = 'free') +
-  labs(x='Day', y= 'Richness', color = 'Data', fill = 'Event', title = 'Richness') +
+  labs(x='Day', y= 'Richness', color = 'Data', fill = 'Predefined\nevent', tag = 'A') +
   theme(legend.position = 'bottom')
 richness_plot
 
@@ -221,8 +225,9 @@ evenness_plot <- alpha_long %>%
   scale_fill_manual(values = c('white','#d94343', '#d98e43', '#f1f011', '#0c9910', '#3472b7', '#7934b7', '#b73485', '#0f5618')) +
   scale_color_manual(values = c('skyblue', 'violet')) +
   geom_line(linewidth=1.5) +
+  geom_point(size = 2) +
   facet_wrap(~person, scales = 'free') +
-  labs(x='Day', y= 'Evenness', color = 'Data', fill = 'Event', title = 'Evenness') +
+  labs(x='Day', y= 'Evenness', color = 'Data', fill = 'Predefined\nevent', tag = 'B') +
   theme(legend.position = 'bottom')
 evenness_plot
 
@@ -249,7 +254,6 @@ ggarrange(alpha %>% filter(!is.na(biota)) %>%
             labs(y = 'Evenness [amplicon data]', x = 'Evenness [shotgun data]', tag = 'B') +
             theme(legend.position = 'none'), nrow = 2)
 ggsave('out/richness_evenntess_compare.png') 
-
 
 # Plot for presentation 
 ggarrange(alpha %>% filter(biota == 'Bulk microbiota') %>% 
@@ -278,6 +282,35 @@ alpha %>% filter(biota == 'Bulk microbiota') %>%
   theme(legend.position = 'none')
 ggsave('out/compare_16s_meta/shannon_corr.png')
 
+# Statistics if alpha diversity is in accrodance between sequencing methods
+# Linear mixed-model - this takes into account the individuals (their points are not independant!)
+
+alpha_lme <- alpha_otu %>% left_join(alpha_mpa, by = join_by('Group' == 'name')) 
+
+library(lmerTest)
+fit_rich <- lmer(S.obs ~ richness + day + (1 | person), data = alpha_lme) 
+summary(fit_rich)
+
+fit_even <- lmer(evenness.x ~ evenness.y + day + (1 | person), data = alpha_lme) 
+summary(fit_even)
+
+
+# Repeated measures correlation
+
+library(rmcorr)
+rmcorr(participant = as.factor(person), 
+       measure1 = S.obs, 
+       measure2 = richness, 
+       data = alpha_lme)
+
+rmcorr(participant = as.factor(person), 
+       measure1 = evenness.x, 
+       measure2 = evenness.y, 
+       data = alpha_lme)
+
+
+
+
 # Beta diveristy 
 beta_mpa <- readRDS('data/longitudinal_shotgun/nmds_mpa_positions.rds')
 beta_otu <- readRDS('data/longitudinal_amplicons/nmds_otu_positions.RDS')
@@ -294,11 +327,47 @@ TukeyHSD(otu_disp)
 
 nmds_otu <- beta_otu %>%
   ggplot(aes(x=NMDS1, y=NMDS2, color=person)) +
-  geom_point(size = 5) +
+  geom_point(size = 3) +
   labs(color = 'Individual') +
   guides(color = guide_legend(nrow = 1)) +
   theme(legend.position = "bottom")
 nmds_otu
+
+# fit metadata 
+meta1 <- metadata %>% 
+  filter(Group %in% rownames(as.matrix(dist_otu))) %>% 
+  column_to_rownames('Group') %>% 
+  select(sample_type, age, height, weight, diet, food_supplements, 
+         general_activity, digestion, household_members, living, environment, 
+         diet14, antibiotics14, probiotics14, stress, bristol, 
+         prebiotics14, medication14, moderate14, active14, dentist14, 
+         vaccination14)
+
+meta1[rownames(as.matrix(dist_otu)), ]
+fit_otu <- envfit(dist_otu, meta1, permutations = 999, na.rm = TRUE)
+fit_otu
+
+# extract arrows
+scores_env <- as.data.frame(scores(fit_otu, display = "vectors"))
+scores_env$pval <- fit_otu$vectors$pvals
+
+# plot
+ord_otu_ar <- ggplot(beta_otu %>% filter(!is.na(person)), aes(x = NMDS1, y = NMDS2, color = person)) +
+  geom_point(size = 3) +
+  geom_segment(data = subset(scores_env, pval < 0.05),
+               aes(x = 0, y = 0, xend = MA001, yend = MA002),
+               arrow = arrow(length = unit(0.3, "cm")),
+               color = "red") +
+  geom_text(data = subset(scores_env, pval < 0.05),
+            aes(x = MA001, y = MA002, label = rownames(scores_env %>% 
+                                                         filter(pval < 0.05))),
+            color = "black", vjust = -0.5) +
+  labs(color = 'Individual') +
+  theme(legend.position = "bottom") 
+ord_otu_ar
+ggsave('out/compare_16s_meta/OTUbeta_with_metadata.png')
+
+
 
 # 
 mpa_disp <- betadisper(dist_mpa, beta_mpa$person)
@@ -307,23 +376,78 @@ ggsave('out/boxplot_betadisper_mpa.png')
 anova(mpa_disp)
 TukeyHSD(mpa_disp)
 
-
 nmds_mpa <- beta_mpa %>% 
   filter(!is.na(person), biota == 'Bulk microbiota') %>% 
   ggplot(aes(x=NMDS1, y=NMDS2, color=person)) +
-  geom_point(size = 5) +
+  geom_point(size = 3) +
   labs(color = 'Individual') +
   guides(color = guide_legend(nrow = 1)) +
   theme(legend.position = "bottom")
 nmds_mpa
 
-ggarrange(nmds_otu + labs(tag ='A'), 
-          nmds_mpa + labs(tag ='B'), common.legend = T, legend = 'bottom') 
-ggsave('out/nmds_both.png')
+ggarrange(nmds_otu + labs(title ='16S amplicon data'), 
+          nmds_mpa + labs(title ='Metagenomic data'), common.legend = T, legend = 'bottom') 
+ggsave('out/compare_16s_meta/nmds_both.png', dpi = 600)
 
-ggarrange(nmds_otu + labs(title ='16S amplicon sequencing'), 
-          nmds_mpa + labs(title ='Metagenomic sequencing'), common.legend = T, legend = 'bottom') 
-ggsave('out/compare_16s_meta/nmds_both_presentation.svg')
+# fit metadata 
+meta2 <- metadata %>% 
+  filter(Group %in% rownames(as.matrix(dist_mpa))) %>% 
+  column_to_rownames('Group') %>% 
+  select(sample_type, age, height, weight, diet, food_supplements, 
+         general_activity, digestion, household_members, living, environment, 
+         diet14, antibiotics14, probiotics14, stress, bristol, 
+         prebiotics14, medication14, moderate14, active14, dentist14, 
+         vaccination14)
+
+meta2[rownames(as.matrix(dist_mpa)), ]
+fit_mpa <- envfit(dist_mpa, meta2, permutations = 999, na.rm = TRUE)
+fit_mpa
+
+# extract arrows
+scores_env <- as.data.frame(scores(fit_mpa, display = "vectors"))
+scores_env$pval <- fit_mpa$vectors$pvals
+
+# plot
+ord_mpa_ar <- ggplot(beta_mpa %>% filter(!is.na(person)), aes(x = NMDS1, y = NMDS2, color = person)) +
+  geom_point(size = 3) +
+  geom_segment(data = subset(scores_env, pval < 0.05),
+               aes(x = 0, y = 0, xend = MA001, yend = MA002),
+               arrow = arrow(length = unit(0.3, "cm")),
+               color = "red") +
+  geom_text(data = subset(scores_env, pval < 0.05),
+            aes(x = MA001, y = MA002, label = rownames(scores_env %>% 
+                                                         filter(pval < 0.05))),
+            color = "black", vjust = -0.5) +
+  labs(color = 'Individual') +
+  theme(legend.position = "bottom") +
+  guides(legend.guide = )
+ord_mpa_ar
+ggsave('out/compare_16s_meta/MPAbeta_with_metadata.png')
+
+
+# What does time has to do with it? 
+meta3 <- metadata %>% 
+  filter(Group %in% rownames(as.matrix(dist_mpa))) %>% 
+  column_to_rownames('Group') %>% 
+  mutate(date = dmy(date), 
+         season = ifelse(month(date) %in% c(12,1,2), "winter",
+                         ifelse(month(date) %in% c(3,4,5), "spring",
+                                ifelse(month(date) %in% c(6,7,8), "summer", "autumn")))) %>% 
+  select(sample_type, season, age, height, weight, diet, food_supplements, 
+         general_activity, digestion, household_members, living, environment, 
+         diet14, antibiotics14, probiotics14, stress, bristol, 
+         prebiotics14, medication14, moderate14, active14, dentist14, 
+         vaccination14) 
+
+fit_season <- envfit(dist_mpa, meta3[, c("season")], permutations = 999)
+fit_season
+
+# Both OTU and MPA
+ggarrange(ord_otu_ar + labs(title ='16S amplicon data') + guides(color = guide_legend(nrow = 1)), 
+          ord_mpa_ar + labs(title ='Metagenomic data') +  guides(color = guide_legend(nrow = 1)),
+          common.legend = T, legend = 'bottom') 
+ggsave('out/compare_16s_meta/beta_both_envfit.png', dpi = 400)
+
 
 # Relative abundance of bacteria for OTUs and MPA 
 otutab <- readRDS('data/longitudinal_amplicons/otutab_ethanol_bulk.RDS')
@@ -382,14 +506,17 @@ mpa_long <- bacteria %>%
 mpa_long$Phylum <- factor(mpa_long$Phylum, levels = c('Bacillota', 'Bacteroidota', 'Actinomycetota', 'Pseudomonadota',
                                                       'Mycoplasmatota', 'Cyanobacteria', 'Verrucomicrobiota','< 0.1%'))
 
-rel_both <- otu_long %>%  mutate(data = 'Amplicon data') %>% 
-  rbind(mpa_long %>%  mutate(data = 'Shotgun data')) %>% 
+rel_both <- otu_long %>%  mutate(data = '16S amplicon data') %>% 
+  rbind(mpa_long %>%  mutate(data = 'Metagenomic data')) %>% 
   mutate(biota = ifelse(biota == 'bulk microbiota', 'untreated sample', biota), 
-         biota = factor(biota, levels = c('untreated sample', 'ethanol treated sample')))
+         biota = factor(biota, levels = c('untreated sample', 'ethanol treated sample')), 
+         Phylum = factor(Phylum, levels = c('Bacillota', 'Bacteroidota', 'Actinomycetota', 'Pseudomonadota',
+                                            'Mycoplasmatota', 'Cyanobacteria', 'Verrucomicrobiota', 'unclassified Bacteria', '< 0.1%')))
 
 ggplot(rel_both, aes(x = data, y = rel, fill = Phylum)) +
   geom_col() +
   facet_wrap(~biota, nrow = 1, scales = 'free_x') +
   scale_fill_manual(values = col_phylum) +
-  labs(x = "", y = "Relative abundance [%]", fill = "Phylum") 
-ggsave('out/rel_abund.png')
+  labs(x = "", y = "Relative abundance [%]", fill = "Phylum") +
+  theme(legend.text = element_text(face = 'italic'))
+ggsave('out/compare_16s_meta/rel_abund.svg')
