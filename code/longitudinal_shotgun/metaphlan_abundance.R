@@ -9,7 +9,11 @@ library(ggnewscale)
 library(vegan)
 library(ggpubr)
 
-theme_set(theme_bw(base_size=14))
+set.seed(96)
+theme_set(theme_bw(base_size = 11) +
+            theme(plot.title   = element_text(size = 11),
+                  axis.title   = element_text(size = 11),
+                  axis.text    = element_text(size = 11)))
 col <- c('#3CB371', '#f0a336')
 colm <- '#3CB371'
 cole <- '#f0a336'
@@ -38,6 +42,7 @@ metadata <- read.table('~/projects/longitudinal_shotgun/data/metadata.csv', head
 sporulation_ability <- read.table('data/sporulation_ability/sporulation_ability2021.tsv', sep = '\t', header =T)
 etoh_species <- read.table('data/longitudinal_shotgun/ethanol_resistant_species.tsv', sep = '\t', header =T)
 
+library(microbiomics)
 bacteria <- read_metaphlan_table('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', kingdom = "k__Bacteria", 
                               lvl = 7, normalize = TRUE) %>% 
   rownames_to_column('name') %>% 
@@ -60,26 +65,40 @@ bacteria <- read_metaphlan_table('~/projects/longitudinal_shotgun/data/metaphlan
   left_join(select(etoh_species, Species, is_ethanol_resistant) %>%  
               mutate(Species = str_replace_all(Species, '_', ' ')), by = 'Species')
 
-length(unique(filter(abund, Domain == 'Bacteria')$Species))
+length(unique(filter(bacteria, Domain == 'Bacteria')$Species))
 
 event_data <- read.table('data/extreme_event_data.csv', sep = ',', header = TRUE)
 
 
-# abund_gtdb <- read.table('~/projects/longitudinal_shotgun/data/gtdb_merged.txt', sep = '\t', header = TRUE) %>% 
-#   pivot_longer(-clade_name) %>% 
-#   filter(grepl('s__', clade_name)) %>% 
-#   separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species'),
-#            sep=";")
-# 
-# length(unique(filter(abund_gtdb, Domain == 'd__Bacteria')$Species))
-
-# At kingdom level
-domain <- filter(abund, is.na(Phylum)) %>% 
-  select(-c(Phylum, Class, Order, Family, Genus, Species, SGB)) %>% 
-  pivot_longer(-Domain) %>%  
+abund <- read.table('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', sep = '\t', header = TRUE) %>%
+  pivot_longer(-clade_name) %>%
+  filter(grepl('s__', clade_name)) %>%
+  separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species'),
+           sep="\\|") %>% 
+  # mutate(name = str_remove_all(name, 'profiled_'), 
+  #        Phylum = ifelse(Phylum == 'p__Firmicutes', 'p__Bacillota', Phylum), 
+  #        Domain = str_remove_all(Domain, 'k__'), 
+  #        Phylum = str_remove_all(Phylum, 'p__'), 
+  #        Class = str_remove_all(Class, 'c__'), 
+  #        Order = str_remove_all(Order, 'o__'), 
+  #        Family = str_remove_all(Family, 'f__'), 
+  #        Genus = str_remove_all(Genus, 'g__'), 
+  #        Species = str_remove_all(Species, 's__')) %>% 
+  mutate(across(everything(), ~ sub("^[a-z]__", "", .)), 
+         name = str_remove_all(name, 'profiled_'), 
+         Phylum = ifelse(Phylum == 'Firmicutes', 'Bacillota', Phylum)) %>%  
   left_join(metadata, by = join_by('name' == 'Group'))
+  
+length(unique(filter(abund, Domain == 'Bacteria')$Species))
 
-domain %>% 
+length(unique(filter(abund, biota == 'ethanol treated sample')$name))
+# At domain level
+abund %>% 
+  group_by(biota, Domain) %>% 
+  #reframe(rel_abund = sum(value)/201) 
+  reframe(rel_abund = sum(value)/85)
+
+abund %>% 
   group_by(biota) %>% 
   mutate(rel_abund = value /sum(value) * 100) %>% 
   ggplot(aes(x = biota, y = rel_abund, fill = Domain)) +
