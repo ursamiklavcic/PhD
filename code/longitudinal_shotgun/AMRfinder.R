@@ -124,7 +124,7 @@ tpm_time <- amr_simplyfied %>%
   geom_point(size = 2, aes(color  = Class)) +
   geom_line(linewidth = 1, aes(color  = Class)) +
   facet_wrap(~person, scales = 'free_y') +
-  labs(y = 'ARG abundance [log10(TPM)]', x = 'Day', color = 'Class of ARG', fill = 'Event') 
+  labs(y = 'ARG abundance\n[log10(TPM)]', x = 'Day', color = 'Class of ARG', fill = 'Event') 
 tpm_time
 ggsave('out/ARGs/AMRf_extreme_event_TPM.png')
 
@@ -163,7 +163,7 @@ ggarrange(unique_time + labs(tag = 'A'),
           common.legend = T, 
           legend = 'bottom', 
           ncol = 1)
-ggsave('out/ARGs/unique_tpm_time_up.svg', dpi=600)
+ggsave('out/ARGs/unique_tpm_time.svg', dpi=600)
 
 # Unique all 
 amr_simplyfied %>% filter(TPM > 0) %>%
@@ -241,6 +241,33 @@ amr %>%
   facet_wrap(~person, scales = 'free_y')
 ggsave('out/ARGs/AMRf_persistence_mechanism_resistence.png')
 
+# Do events in individuals life influence diveristy or abundance of ARGs? 
+tpm_unique_amr <- amr_simplyfied %>%
+  filter(TPM > 0) %>% 
+  group_by(Group, person, Class) %>%
+  reframe(TPM = sum(TPM), 
+          unique = n_distinct(ARG)) %>% 
+  left_join(metadata, by = c('Group', 'person')) %>%  
+  mutate(extremevent_type = ifelse(is.na(extremevent_type), 'none', extremevent_type))
+
+# 
+sapply(tpm_unique_amr, function(x) length(unique(na.omit(x))))
+
+
+eventTPM_lme <- lmer(TPM ~ age + height + weight + diet + food_supplements + general_activity +
+                     household_members + diet14 + antibiotics14 + prebiotics14 + probiotics14 +
+                    supplements14 + stress + extremevent_type + vaccination14 + bristol + (1 | person), 
+                  data = tpm_unique_amr)
+summary(eventTPM_lme)
+
+# unique 
+event_lme <- lmer(unique ~ age + height + weight + diet + food_supplements + general_activity +
+                    household_members + diet14 + antibiotics14 + prebiotics14 + probiotics14 +
+                    supplements14 + stress + extremevent_type + vaccination14 + bristol, 
+                  data = tpm_unique_amr)
+summary(event_lme)
+
+
 # Correlation Shannons diveristy based on SGBs and TPM/unique ARGs
 # At the level of Class of ARG
 alpha <- readRDS('data/longitudinal_shotgun/alpha_diveristy.RDS') %>%  
@@ -284,19 +311,43 @@ labels <- coefs[grep("shannon:Class", rownames(coefs)), "Pr(>|t|)"] %>%
   mutate(Class = substr(Class, 14, 100)) %>% 
   rbind(data.frame(Class = 'AMINOGLYCOSIDE', . = 0.4414))
 
-ggplot(amr_alpha, aes(x = shannon, y = unique, color = person)) +
+shannon_diveristy <- ggplot(amr_alpha, aes(x = shannon, y = unique, color = person)) +
   geom_point(alpha = 0.7, size = 2) +
   geom_smooth(method = "lm", se = TRUE, color = "black") +
   geom_text(data = labels, aes(x = 4, y = 2.5, label = paste0('p = ',signif(., 2))), inherit.aes = F) +
   facet_wrap(~ Class, scales = "free_y") +
   labs(x = "Shannon's diversity index",
-    y = "ARG diversity [# unique genes]", color = 'Individual')
-ggsave('out/ARGs/lme_corr_simple.svg', dpi=400)
+    y = "ARG diversity\n[number of unique genes]", color = 'Individual')
+shannon_diveristy
+ggsave('out/ARGs/lme_corr_simple_diveristy.svg', dpi=400)
 
 # testing abundance ARGs + bacterial diveristy! 
 classTPM_lme <- lmerTest::lmer(data = amr_alpha, formula = log10(TPM) ~ shannon * Class + (1 | person))
 summary(classTPM_lme, correlation=TRUE)
 
+coefs <- summary(classTPM_lme)$coefficients
+labelsTPM <- coefs[grep("shannon:Class", rownames(coefs)), "Pr(>|t|)"] %>% 
+  as.data.frame() %>% 
+  rownames_to_column('Class') %>% 
+  mutate(Class = substr(Class, 14, 100)) %>% 
+  rbind(data.frame(Class = 'AMINOGLYCOSIDE', . = 0.15649))
+
+shannon_abundance <- ggplot(amr_alpha, aes(x = shannon, y = TPM, color = person)) +
+  geom_point(alpha = 0.7, size = 2) +
+  geom_smooth(method = "lm", se = TRUE, color = "black") +
+  geom_text(data = labelsTPM, aes(x = 4, y = 2.5, label = paste0('p = ',signif(., 2))), inherit.aes = F) +
+  scale_y_log10() +
+  facet_wrap(~ Class, scales = "free_y") +
+  labs(x = "Shannon's diversity index",
+       y = "ARG abundance\n[log10(TPM)]", color = 'Individual')
+shannon_abundance
+ggsave('out/ARGs/lme_corr_simple_abundance.svg', dpi=400)
+
+ggarrange(shannon_diveristy + labs (tag = 'A'),
+          shannon_abundance + labs (tag = 'B'), 
+          common.legend = TRUE, legend = 'bottom', 
+          nrow = 2, align = 'hv')
+ggsave('out/ARGs/lme_corr_simple_BOTH.svg', dpi=400)
 
 # # Matrix of correlations between Shannon and abundance of ARGs 
 # cor_data <- amr_alpha %>%
