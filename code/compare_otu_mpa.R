@@ -10,6 +10,7 @@ library(ggpubr)
 library(purrr)
 library(stringr)
 library(readxl)
+library(microbiomics)
 
 set.seed(96)
 theme_set(theme_bw(base_size = 12) +
@@ -23,6 +24,8 @@ otutab <- readRDS('data/longitudinal_amplicons/otutab_ethanol_bulk.RDS')
 taxtab <- readRDS('data/longitudinal_amplicons/taxtab.RDS')
 metadata <- read.table('data/metadata.csv', sep = ';', header = T) %>% 
   mutate(biota = ifelse(biota == 'bulk microbiota', 'untreated sample', biota))
+
+
 
 otu_long <- pivot_longer(as.data.frame(otutab) %>%  rownames_to_column('Group'), cols = starts_with('Otu')) %>%  
   left_join(taxtab, by = 'name')
@@ -39,11 +42,18 @@ genus_otu <- filter(otu_long, value > 0) %>%
 
 
 # metaG data 
-abund <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', comment = '#') %>%
-  rename_with(~ str_remove(., '^profiled_'), starts_with('profiled_')) %>%
-  #mutate(clade_name = str_remove_all(clade_name, '[a-zA-Z]__')) %>%
-  separate(clade_name, into=c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species', 'SGB'),
-           sep="\\|") %>% 
+sporulation_ability <- read.table('data/sporulation_ability/sporulation_ability2021.tsv', sep = '\t', header =T)
+etoh_species <- read.table('data/longitudinal_shotgun/ethanol_resistant_species.tsv', sep = '\t', header =T)
+
+bacteria <- read_metaphlan_table('~/projects/longitudinal_shotgun/data/metaphlan_abundance_table.txt', kingdom = "k__Bacteria", 
+                                 lvl = 7, normalize = TRUE) %>% 
+  rownames_to_column('name') %>% 
+  pivot_longer(names_to = 'clade_name', values_to = 'value', cols = starts_with('k__')) %>% 
+  mutate(name = str_remove_all(name, 'profiled_')) %>% 
+  filter(name != 'MC013') %>% 
+  left_join(metadata, by = join_by('name' == 'Group')) %>% 
+  tidyr::separate_wider_delim(clade_name, delim = ".",
+                              names = c('Domain', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species')) %>%  
   mutate(Phylum = ifelse(Phylum == 'p__Firmicutes', 'p__Bacillota', Phylum), 
          Domain = str_remove_all(Domain, 'k__'), 
          Phylum = str_remove_all(Phylum, 'p__'), 
@@ -52,15 +62,23 @@ abund <- read_tsv('~/projects/longitudinal_shotgun/data/metaphlan_abundance_tabl
          Family = str_remove_all(Family, 'f__'), 
          Genus = str_remove_all(Genus, 'g__'), 
          Species = str_remove_all(Species, 's__'), 
-         SGB = str_remove_all(SGB, 't__')) %>% 
-  select(-MC013)
-
-
-bacteria <- filter(abund, Domain == 'Bacteria', !is.na(Phylum), !is.na(Class), 
-                   !is.na(Order), !is.na(Family), !is.na(Genus), !is.na(Species), !is.na(SGB)) %>% 
-  pivot_longer(-c(Domain, Phylum, Class, Order, Family, Genus, Species, SGB)) %>% 
-  left_join(metadata, by = join_by('name' == 'Group')) %>% 
-  mutate(PA = ifelse(value > 0, 1, 0))
+         Species = str_replace_all(Species, '_', ' ')) %>% 
+  left_join(select(sporulation_ability, PA, n_genes, sporulation_ability, Species), by = 'Species') %>% 
+  left_join(select(etoh_species, Species, is_ethanol_resistant) %>%  
+              mutate(Species = str_replace_all(Species, '_', ' ')), by = 'Species') %>% 
+  mutate(Phylum = case_when(
+    Phylum == 'Actinobacteria' ~ 'Actinomycetota',
+    Phylum == 'Candidatus_Saccharibacteria' ~ 'Saccharibacteria',
+    Phylum == 'Chloroflexi' ~ 'Chloroflexota',
+    Phylum == 'Proteobacteria' ~ 'Pseudomonadota',
+    Phylum == 'Lentisphaerae' ~ 'Lentisphaerota',
+    Phylum == 'Fusobacteria' ~ 'Fusobacterium',
+    Phylum == 'Verrucomicrobia' ~ 'Verrucomicrobiota',
+    Phylum == 'Bacteria_unclassified' ~ 'unclassified Bacteria',
+    Phylum == 'Candidatus_Melainabacteria' ~ 'Cyanobacteria',
+    Phylum == 'Synergistetes' ~ 'Synergistota',
+    Phylum == 'Tenericutes' ~ 'Mycoplasmatota',
+    TRUE ~ Phylum ))
 
 species <- bacteria %>%
   filter(value > 0) %>% 
@@ -115,55 +133,162 @@ all %>% ggplot(aes(x = genus_otus, y = genus_meta, color = biota)) +
 ggsave('out/compare_genera_original.png', dpi = 600)
 
 # Compare relative abundance 
-# col_phylum = c('#1F77B4', '#FF7F0E',  '#2CA02C',  '#D62728', '#9467BD', '#8C564B', '#f4d03f', 
-#                )
-# otu_rel <- otu_long %>% 
-#   left_join(metadata, by = 'Group') %>% 
-#   group_by(biota) %>% 
-#   mutate(rel_abund = value/sum(value)*100) %>% 
-#   ungroup() %>%
-#   group_by(biota, Phylum) %>% 
-#   reframe(rel_abund_otu = sum(rel_abund)) %>% 
-#   mutate(Phylum = case_when(
-#     Phylum == 'TM7' ~ 'Saccharibacteria', 
-#     Phylum == 'Tenericutes' ~ 'Mycoplasmatota', 
-#     Phylum == 'Lentisphaerae' ~ 'Lentisphaerota', 
-#     Phylum == 'Synergistetes' ~ 'Synergistota',
-#     Phylum == 'Deferribacteres' ~ 'Deferribacteraceae', 
-#     Phylum == 'Fusobacteria' ~ 'Fusobacterium',
-#     TRUE ~ Phylum))
-#  
-# unique(otu_rel$Phylum)
-# 
-# mpa_rel <- bacteria %>% 
-#   mutate(value = ifelse(is.na(value), 0, value)) %>% 
-#   group_by(biota, Phylum, Species) %>% 
-#   reframe(value = value/sum(value, na.rm = TRUE)) %>% 
-#   group_by(biota, Phylum) %>% 
-#   reframe(rel_abund_mpa = sum(value, na.rm = TRUE)) %>% 
-#   mutate(Phylum = case_when(
-#     Phylum == 'Actinobacteria' ~ 'Actinomycetota',
-#     Phylum == 'Candidatus_Saccharibacteria' ~ 'Saccharibacteria',
-#     Phylum == 'Chloroflexi' ~ 'Chloroflexota',
-#     Phylum == 'Proteobacteria' ~ 'Pseudomonadota',
-#     Phylum == 'Lentisphaerae' ~ 'Lentisphaerota', 
-#     Phylum == 'Fusobacteria' ~ 'Fusobacterium',
-#     Phylum == 'Verrucomicrobia' ~ 'Verrucomicrobiota', 
-#     Phylum == 'Bacteria_unclassified' ~ 'unclassified Bacteria',
-#     Phylum == 'Candidatus_Melainabacteria' ~ 'Cyanobacteria', 
-#     Phylum == 'Synergistetes' ~ 'Synergistota',
-#     Phylum == 'Tenericutes' ~ 'Mycoplasmatota', 
-#     TRUE ~ Phylum ))
-# 
-# unique(mpa_rel$Phylum)
-# 
-# rel <- full_join(mpa_rel, otu_rel, by = c('biota', 'Phylum')) %>% 
-#   pivot_longer(names_to = 'sample', values_to = 'rel_abund', cols = starts_with('rel_abund')) 
-# 
-# rel %>% 
-#   ggplot(aes(x = biota, y = rel_abund, fill = Phylum)) +
-#   geom_col() +
-#   facet_wrap(~sample)
+col_phylum = c('#1F77B4', '#FF7F0E',  '#2CA02C',  '#D62728', '#9467BD', '#8C564B', '#f4d03f',  'pink', 'gray')
+
+
+otu_long_all <-  readRDS('data/longitudinal_amplicons/otu_long_all.RDS') %>%
+  mutate(Phylum = case_when(
+    Phylum == 'Actinobacteria' ~ 'Actinomycetota',
+    Phylum == 'Candidatus_Saccharibacteria' ~ 'Saccharibacteria',
+    Phylum == 'Chloroflexi' ~ 'Chloroflexota',
+    Phylum == 'Proteobacteria' ~ 'Pseudomonadota',
+    Phylum == 'Lentisphaerae' ~ 'Lentisphaerota',
+    Phylum == 'Fusobacteria' ~ 'Fusobacterium',
+    Phylum == 'Verrucomicrobia' ~ 'Verrucomicrobiota',
+    Phylum == 'Bacteria_unclassified' ~ 'unclassified Bacteria',
+    Phylum == 'Candidatus_Melainabacteria' ~ 'Cyanobacteria',
+    Phylum == 'Synergistetes' ~ 'Synergistota',
+    Phylum == 'Tenericutes' ~ 'Mycoplasmatota',
+    TRUE ~ Phylum )) 
+
+otu_rel <- otu_long_all %>% 
+  group_by(Phylum, is_ethanol_resistant) %>%
+  reframe(`16S amplicon data` = sum(rel_abund)/n_distinct(Group)*100) 
+
+unique(otu_rel$Phylum)
+
+mpa_rel <- bacteria %>%
+  group_by(name, Phylum, is_ethanol_resistant) %>%
+  reframe(total_abund = sum(value, na.rm = T)) %>% 
+  group_by(Phylum, is_ethanol_resistant) %>% 
+  reframe(`Metagenomic data` = sum(total_abund)/n_distinct(name)*100)
+  
+unique(mpa_rel$Phylum)
+
+rel <- full_join(mpa_rel, otu_rel, by = c('Phylum', 'is_ethanol_resistant')) %>%
+  pivot_longer(names_to = 'sample', values_to = 'rel_abund', cols = 3:4) %>% 
+  mutate(phylum = ifelse(rel_abund < 0.1, '< 0.1 %', Phylum)) %>%  
+  filter(!is.na(phylum))
+
+rel %>%
+  mutate(phylum = factor(phylum, levels = c('Bacillota', 'Bacteroidota', 'Actinomycetota', 'Pseudomonadota', 
+                         'Verrucomicrobiota', 'Mycoplasmatota', 'Cyanobacteria', 'unclassified Bacteria', '< 0.1 %'))) %>% 
+  ggplot(aes(y = is_ethanol_resistant, x = rel_abund, fill = phylum)) +
+  geom_col() +
+  scale_fill_manual(values = col_phylum) +
+  facet_wrap(~sample, scales = 'free_x') +
+  labs(x = 'Relative abundance [%]', y = '')
+ggsave('out/compare_16s_meta/relative_abundance_col.png', dpi=400)
+
+# Relative abudnance of these taxa in each sample
+p_pyhlum <- otu_long_all %>%  
+  filter(is_ethanol_resistant == c('Ethanol-resistant', 'Non ethanol-resistant')) %>% 
+  filter(!Phylum %in% c('TM7', 'Deferribacteres', 'Lentisphaerota', 'Verrucomicrobiota')) %>% 
+  group_by(Phylum, is_ethanol_resistant, person) %>% 
+  reframe(rel_abund = mean(rel_abund, na.rm =T)) %>% 
+  group_by(Phylum) %>%  
+  reframe(test = list(wilcox.test(rel_abund[is_ethanol_resistant == "Ethanol-resistant"],
+                                  rel_abund[is_ethanol_resistant == "Non ethanol-resistant"]))) %>% 
+  mutate(p_value = sapply(test, function(x) x$p.value))
+p_pyhlum
+
+rel_otu_plot <- otu_long_all %>%  
+  filter(is_ethanol_resistant == c('Ethanol-resistant', 'Non ethanol-resistant')) %>% 
+  group_by(Phylum, is_ethanol_resistant, person) %>% 
+  reframe(rel_abund = mean(rel_abund, na.rm =T)) %>% 
+  ggplot(aes(y = Phylum, x = rel_abund, fill = is_ethanol_resistant)) +
+  geom_boxplot()+
+  geom_text(p_pyhlum, mapping = aes(y = Phylum, x = 1e-3, label = paste0('p =', signif(p_value, 2))), inherit.aes = F) + 
+  scale_x_log10() +
+  scale_fill_manual(values = c( '#f0a336', '#3CB371')) +
+  labs(x = 'Relative abundance [%]', y = '', fill = '') +
+  theme(legend.position = 'bottom', axis.text.y = element_text(face = 'italic')) 
+rel_otu_plot
+ggsave('out/compare_16s_meta/rel_otu_etoh_non.svg', dpi = 400)
+
+# Metagenomic data 
+p_phylum_mpa <- bacteria %>%  
+  filter(is_ethanol_resistant == c('Ethanol-resistant', 'Non ethanol-resistant')) %>% 
+  filter(!Phylum %in% c('Chloroflexota', 'Fusobacterium', 'Synergistota', 'unclassified Bacteria', 'Mycoplasmatota', 'Saccharibacteria')) %>% 
+  group_by(Phylum, is_ethanol_resistant, person) %>% 
+  reframe(value = mean(value, na.rm =T)) %>% 
+  group_by(Phylum) %>%  
+  reframe(test = list(wilcox.test(value[is_ethanol_resistant == "Ethanol-resistant"],
+                                  value[is_ethanol_resistant == "Non ethanol-resistant"]))) %>% 
+  mutate(p_value = sapply(test, function(x) x$p.value))
+p_phylum_mpa
+
+rel_mpa_plot <- bacteria %>% 
+  filter(is_ethanol_resistant == c('Ethanol-resistant', 'Non ethanol-resistant')) %>% 
+  group_by(Phylum, is_ethanol_resistant, person) %>% 
+  reframe(value = mean(value, na.rm =T)) %>% 
+  ggplot(aes(y = Phylum, x = value, fill = is_ethanol_resistant)) +
+  geom_boxplot()+
+  geom_text(p_phylum_mpa, mapping = aes(y = Phylum, x = 1e-6, label = paste0('p =', signif(p_value, 2))), inherit.aes = F) + 
+  scale_x_log10() +
+  scale_fill_manual(values = c( '#f0a336', '#3CB371')) +
+  labs(x = 'Relative abundance [%]', y = '', fill = '') +
+  theme(legend.position = 'bottom', axis.text.y = element_text(face = 'italic')) 
+rel_mpa_plot
+ggsave('out/compare_16s_meta/rel_species_etoh_non.svg', dpi = 400)
+
+p1 <-ggarrange(rel_otu_plot + labs(title = '16S amplicon data'), 
+          rel_mpa_plot + labs(title = 'Metagenomic data'), 
+          common.legend = TRUE, legend = 'bottom')
+p1
+ggsave('out/compare_16s_meta/rel_both_etoh_non.svg', dpi = 400)
+
+# For spore-forming and ethanol-resistant together! 
+long_mpa <- readRDS('~/projects/longitudinal_amplicons/data/r_data/long_mpa.RDS')
+
+rel_mpa_plot2 <- long_mpa %>%  
+  filter(is_ethanol_resistant %in% c('Ethanol-resistant', 'Non ethanol-resistant'), 
+         !is.na(sporulation_ability)) %>% 
+  group_by(is_ethanol_resistant, sporulation_ability, person, Species) %>% 
+  reframe(value = mean(value)) %>%  
+  ggplot(aes(x = paste0(is_ethanol_resistant,' ' ,sporulation_ability), y = value)) +
+  geom_boxplot() +
+  scale_y_log10() +
+  stat_compare_means(method = 'wilcox', p.adjust.method = "BH", comparisons = list(
+    c("Ethanol-resistant Non-spore-former", "Non ethanol-resistant Non-spore-former"),
+    c("Ethanol-resistant Non-spore-former", "Non ethanol-resistant Spore-former"),
+    c("Ethanol-resistant Non-spore-former", "Ethanol-resistant Spore-former"),
+    c("Ethanol-resistant Spore-former", "Non ethanol-resistant Spore-former"),
+    c("Ethanol-resistant Spore-former", "Non ethanol-resistant Non-spore-former"),
+    c("Non ethanol-resistant Spore-former", "Non ethanol-resistant Non-spore-former"))) +
+  #scale_fill_manual(values = c( '#f0a336', '#3CB371', 'grey')) +
+  #facet_wrap(~is_ethanol_resistant, scales = 'free') +
+  labs(x = '', y = 'Relative abundance [%]') +
+  theme_bw(base_size = 12) +
+  theme(legend.position = 'bottom', 
+        plot.title   = element_text(size = 12),
+        axis.title   = element_text(size = 12),
+        axis.text    = element_text(size = 11), 
+        legend.text = element_text(size = 11)) 
+rel_mpa_plot2
+
+# OTUs simple
+rel_otu_plot2 <- otu_long_all %>% 
+  filter(is_ethanol_resistant %in% c('Ethanol-resistant', 'Non ethanol-resistant')) %>% 
+  group_by(is_ethanol_resistant, person, name) %>% 
+  reframe(rel_abund = mean(rel_abund)) %>%  
+  ggplot(aes(x = is_ethanol_resistant, y = rel_abund)) +
+  geom_boxplot() +
+  scale_y_log10() +
+  stat_compare_means(method = 'wilcox') +
+  labs(x = '', y = 'Relative abundance [%]') +
+  theme_bw(base_size = 12) +
+  theme(legend.position = 'bottom', 
+        plot.title   = element_text(size = 12),
+        axis.title   = element_text(size = 12),
+        axis.text    = element_text(size = 11), 
+        legend.text = element_text(size = 11)) 
+
+
+ggarrange(rel_otu_plot2 + labs(title = '16S amplicon data'), 
+           rel_mpa_plot2 + labs(title = 'Metagenomic data'),
+           align = 'v', widths = c(0.7, 1))
+ggsave('out/compare_16s_meta/supplement_rel_both_simple.svg', dpi = 400)
 
 # Alpha diveristy 
 
