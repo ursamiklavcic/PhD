@@ -8,7 +8,11 @@ library(ggpubr)
 library(scales)
 
 set.seed(96)
-theme_set(theme_bw(base_size=14))
+theme_set(theme_bw(base_size = 12) +
+            theme(plot.title   = element_text(size = 12),
+                  axis.title   = element_text(size = 12),
+                  axis.text    = element_text(size = 12)))
+
 
 otutab <- readRDS('data/longitudinal_amplicons/otutab_ethanol_bulk.RDS')
 taxtab <- readRDS('data/longitudinal_amplicons/taxtab.RDS')
@@ -67,6 +71,12 @@ nonetoh_otus <- otu_long %>% filter(substr(Group, 1, 1) == 'M' & PA == 1) %>%
   pull(unique(name))
 length(unique(nonetoh_otus))
 
+# OTUs ALL including unceratin and undetermined! 
+otu_long_all <- otu_long %>% 
+  mutate(is_ethanol_resistant = ifelse(name %in% etoh_otus, 'Ethanol-resistant', 
+                                       ifelse(name %in% uncertain_otus, 'Uncertain', 
+                                              ifelse(name %in% nonetoh_otus, 'Non ethanol-resistant', 'Only ethanol treated samples'))))
+saveRDS(otu_long_all, 'data/longitudinal_amplicons/otu_long_all.RDS')
 
 ##  OTU analysis 
 
@@ -111,7 +121,6 @@ relative <- ggplot(long_all) +
   geom_boxplot(mapping = aes(x = Phylum, y = rel_abund, fill = is_ethanol_resistant)) +
   geom_text(res_relative, mapping =aes(x = Phylum, y = 1, label = paste('p =', scientific(pvalue, digits =0))), size = 4) +
   scale_y_log10() +
-  scale_fill_manual(values = col2) +
   labs(x = '', y = 'Relative abundance [log10]', fill = '') +
   theme(legend.position = 'bottom', 
         axis.ticks.x = element_blank(), 
