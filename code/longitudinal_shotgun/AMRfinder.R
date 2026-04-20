@@ -10,7 +10,10 @@ library(ggpubr)
 library(lubridate)
 
 set.seed(96)
-theme_set(theme_bw(base_size = 14))
+theme_set(theme_bw(base_size = 12) +
+            theme(plot.title   = element_text(size = 12),
+                  axis.title   = element_text(size = 12),
+                  axis.text    = element_text(size = 12)))
 
 metadata <- read_csv2('~/projects/longitudinal_shotgun/data/metadata.csv') 
 
@@ -75,52 +78,6 @@ amr_simplyfied %>% summarise(n_distinct(ARG))
 
 amr_simplyfied %>% summarise(n_distinct(Class))
 
-# unique classes 
-unique <- amr %>%
-  group_by(Class) %>%
-  summarise(sum_unique = n_distinct(ARG)) %>%
-  ggplot(aes(x = sum_unique, y = reorder(Class, sum_unique))) +
-  geom_col() +
-  labs(x = '# unique genes', y = 'Class of ARG')
-unique
-ggsave('out/ARGs/AMRf_class_unique.png')
-
-# tpm of each unique class 
-tpm <- amr %>%
-  group_by(Class) %>%
-  reframe(sum_TPM = sum(TPM),.groups = 'drop') %>%
-  ggplot(aes(x = sum_TPM, y = reorder(Class, sum_TPM))) +
-  geom_col() +
-  scale_x_log10() +
-  labs(y = 'Class of ARG', x = 'log(TPM)') 
-  
-  #caption = 'TPM = a feature (be it a transcript, a gene or a functional category) 
-  #     the number of times that we would find that feature when randomly sampling 1 million features, 
-  #     given the abundances of the different features in our sample')
-tpm
-ggsave('out/ARGs/AMRf_TPM_unique_class_ARGs_log.png')
-
-ggarrange(unique, tpm, common.legend = TRUE)
-ggsave('out/ARGs/AMRf_TPM_class_ARGs.png')
-
-# mechanism of resistence 
-amr %>%
-  group_by(mechanism_resistence) %>%
-  reframe(sum_TPM = sum(TPM),.groups = 'drop') %>%
-  ggplot(aes(x = sum_TPM, y = reorder(mechanism_resistence, sum_TPM))) +
-  geom_col() +
-  labs(y = 'Mechanism of resistence', x = 'TPM') 
-ggsave('out/ARGs/AMRf_mechanisms_tpm.png')
-
-amr %>%
-  group_by(mechanism_resistence) %>%
-  reframe(unique = n_distinct(ARG),.groups = 'drop') %>%
-  ggplot(aes(x = unique, y = reorder(mechanism_resistence, unique))) +
-  geom_col() +
-  scale_x_log10() +
-  labs(y = 'Mechanism of resistence', x = '# unique ARGs') 
-ggsave('out/ARGs/AMRf_mechanisms_unique.png')
-
 # Number of unique mechanisms colored by class
 amr_tpm <- amr %>%
   group_by(mechanism_resistence, Class) %>%
@@ -150,9 +107,6 @@ ggarrange(amr_unique + labs(tag = 'A'),
           amr_tpm + labs(tag = 'B'), 
           common.legend = T, legend = 'bottom', 
           nrow = 2)
-
-ggsave('out/ARGs/unique_tpm_args_mechanism.png', dpi = 600)
-library(svglite)
 ggsave('out/ARGs/unique_tpm_args_mechanism.svg', dpi = 600)
 
 
@@ -160,7 +114,7 @@ ggsave('out/ARGs/unique_tpm_args_mechanism.svg', dpi = 600)
 # Taking into account events 
 event_data <- read.table('data/extreme_event_data.csv', sep = ',', header = TRUE) 
 
-unique_time <- amr_simplyfied %>%
+tpm_time <- amr_simplyfied %>%
   group_by(person, day, Class) %>%
   reframe(sum_TPM = sum(TPM), extremevent_type) %>%
   ggplot(aes(x = day, y = sum_TPM)) +
@@ -170,12 +124,26 @@ unique_time <- amr_simplyfied %>%
   geom_point(size = 2, aes(color  = Class)) +
   geom_line(linewidth = 1, aes(color  = Class)) +
   facet_wrap(~person, scales = 'free_y') +
-  labs(y = 'TPM [log10]', x = 'Day', color = 'Class of ARG', fill = 'Event type') 
-unique_time
+  labs(y = 'ARG abundance [log10(TPM)]', x = 'Day', color = 'Class of ARG', fill = 'Event') 
+tpm_time
 ggsave('out/ARGs/AMRf_extreme_event_TPM.png')
 
+# All ARGs together 
+amr_simplyfied %>%
+  group_by(person, day, ) %>%
+  reframe(sum_TPM = sum(TPM), extremevent_type) %>%
+  ggplot(aes(x = day, y = sum_TPM)) +
+  geom_rect(data = event_data, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = extremevent_type), inherit.aes = FALSE,
+            alpha = 0.6) +
+  scale_fill_manual(values = c('white','#d94343', '#d98e43', '#f1f011', '#0c9910', '#3472b7', '#7934b7', '#b73485', '#0f5618')) +
+  geom_point(size = 2) +
+  geom_line(linewidth = 1) +
+  facet_wrap(~person) +
+  labs(y = 'ARG abundance [log10(TPM)]', x = 'Day', fill = 'Event') 
+ggsave('out/ARGs/all_ARGs_time.png', dpi=600)
+
 # Number of different ARGs per individual through time 
-tpm_time <- amr_simplyfied %>% filter(TPM > 0) %>%
+unique_time <- amr_simplyfied %>% filter(TPM > 0) %>%
   group_by(person, day, Class) %>%
   summarise(sum_unique = n_distinct(ARG), .groups = 'drop') %>%
   filter(sum_unique > 0) %>%
@@ -186,8 +154,8 @@ tpm_time <- amr_simplyfied %>% filter(TPM > 0) %>%
   geom_point(size = 2, aes(color = Class)) +
   geom_line(linewidth=1, aes(color = Class)) +
   facet_wrap(~person, scales = 'free_y') +
-  labs(y = '# unique genes', x = 'Day', color = 'Class of ARG', fill = 'Event type') 
-tpm_time
+  labs(y = 'ARG diversity\n[number of unique genes]', x = 'Day', color = 'Class of ARG', fill = 'Event') 
+unique_time
 ggsave('out/ARGs/AMRf_unique_class_ARG.png')
 
 ggarrange(unique_time + labs(tag = 'A'), 
@@ -196,6 +164,21 @@ ggarrange(unique_time + labs(tag = 'A'),
           legend = 'bottom', 
           ncol = 1)
 ggsave('out/ARGs/unique_tpm_time_up.svg', dpi=600)
+
+# Unique all 
+amr_simplyfied %>% filter(TPM > 0) %>%
+  group_by(person, day) %>%
+  summarise(sum_unique = n_distinct(ARG), .groups = 'drop') %>%
+  filter(sum_unique > 0) %>%
+  ggplot(aes(x = day, y = sum_unique)) +
+  geom_rect(data = event_data, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = extremevent_type), inherit.aes = FALSE,
+            alpha = 0.6) +
+  scale_fill_manual(values = c('white','#d94343', '#d98e43', '#f1f011', '#0c9910', '#3472b7', '#7934b7', '#b73485', '#0f5618')) +
+  geom_point(size = 2) +
+  geom_line(linewidth=1) +
+  facet_wrap(~person, scales = 'free_y') +
+  labs(y = '# unique genes', x = 'Day', fill = 'Event type')
+ggsave('out/ARGs/unique_ARGs_all.png', dpi=600)
 
 # What is the taxonomy of different ARG classes 
 amr_tax <- amr_simplyfied %>%
@@ -247,17 +230,6 @@ ggarrange(unique_tax +labs(tag = 'A'), tpm_tax + labs(tag = 'B'),
           common.legend = T, legend =  'bottom')
 ggsave('out/ARGs/AMRf_unique_tpm_ARGs_taxonomy.png', dpi = 600)
 
-# All genes through time 
-amr %>%
-  group_by(ARG, person, time_point, Class) %>%
-  reframe(TPM = sum(TPM)) %>%
-  filter(TPM > 0) %>%
-  ggplot(aes(x = time_point, y = TPM, color = ARG)) +
-  geom_line(show.legend = TRUE) +
-  scale_y_log10() +
-  facet_wrap(~person, scales = 'free_y')
-ggsave('out/ARGs/tpm_time_ARGs.png')
-
 # Mechanisms through time
 amr %>%
   group_by(person, time_point, mechanism_resistence) %>%
@@ -271,102 +243,128 @@ ggsave('out/ARGs/AMRf_persistence_mechanism_resistence.png')
 
 # Correlation Shannons diveristy based on SGBs and TPM/unique ARGs
 # At the level of Class of ARG
-amr_simplyfied %>%
-  group_by(person, day, Class) %>%
-  reframe(TPM = sum(TPM)) %>%
-  filter(TPM > 0) %>%
-  ggplot(aes(x = day, y = TPM, color = Class)) +
-  geom_line(linewidth =1.2) +
-  scale_y_log10() +
-  facet_wrap(~person, scales = 'free')+
-  labs(x = 'Day', y = 'TPM [log10]', color = 'Class fo ARGs')
-ggsave('out/ARGs/tpm_time_Class.png')
-
 alpha <- readRDS('data/longitudinal_shotgun/alpha_diveristy.RDS') %>%  
   filter(biota == 'bulk microbiota')
 
-tpm_amr <- amr_simplyfied %>%
+tpm_unique_amr <- amr_simplyfied %>%
   filter(TPM > 0) %>% 
   group_by(Group, person, Class) %>%
   reframe(TPM = sum(TPM), 
           unique = n_distinct(ARG))
 
-amr_alpha <- select(alpha, name, richness, shannon, evenness, date) %>% 
-  full_join(tpm_amr, by = join_by('name' == 'Group'))
+amr_alpha <- select(alpha, name, richness, shannon, evenness, date, day) %>% 
+  full_join(tpm_unique_amr, by = join_by('name' == 'Group'))
 
-amr_alpha %>% 
-  ggplot(aes(x = shannon, y = TPM, color = Class)) +
-  geom_point(size = 2) +
-  facet_wrap(~person, scales = 'free')
-ggsave('out/ARGs/tpm_shannon.png')
+# Correlation linear-mixed effect model for correlation between Shannon diveristy and ARG diveristy and/or abundance 
+amr_alpha
 
-# Matrix of correlations between Shannon and abundance of ARGs 
-cor_data <- amr_alpha %>%
-  group_by(person, Class) %>%
-  reframe(cor_shannon_tpm = cor.test(shannon, TPM, method = "pearson")$p.value,
-          cor_shannon_unique = cor.test(shannon, unique, method = "pearson")$p.value)
+library(lmerTest)
 
-ggplot(amr_alpha, aes(x = shannon, y = TPM)) +
-  geom_point(aes(color = person)) +
-  geom_smooth(method = 'lm') +
-  stat_cor(label.y.npc = 'top', method = 'spearman') +
-  facet_wrap(~Class, scales = 'free_y') +
-  labs(x = 'Shannon', y = 'TPM [log10]', color = 'Individual')
-ggsave('out/ARGs/correlation_abundanceARG_shannon.svg', dpi = 600)
+lme_simple <-lmerTest::lmer(data = amr_alpha, formula = unique ~ shannon + day + (1 | person))
+summary(lme_simple)
 
-ggplot(cor_data, aes(x = person, y = Class, fill = cor_shannon_tpm)) +
-  geom_tile() +
-  geom_text(aes(label = sprintf("%.3f", cor_shannon_tpm))) +
-  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0.1, limits = c(0, 1)) + 
-  labs(fill = "Pearson\n correlation", x = "Individual", y = '', 
-       title = 'Correlation between Shannon diversity and abundance of an ARG class') 
-ggsave('out/ARGs/correlation_matrix_abundanceARG_shannon.png', dpi=600)
+# Does this positive interaction change with time? 
+lme_time <- lmerTest::lmer(data = amr_alpha, formula = unique ~ shannon * day + (1 | person)) # NO time does not have an effect! 
+summary(lme_time)
 
-# cor.test(filter(amr_alpha, person == 'A')$shannon, filter(amr_alpha, person == 'A')$TPM, method = 'pearson')$p.value
+# Per class? 
+class1_lme <- lmerTest::lmer(data = amr_alpha, formula = unique ~ shannon + (1 | person) + (1 + shannon | Class))
+summary(class1_lme)
 
-# Matrix shannon and diveristy of ARGs 
-ggplot(amr_alpha, aes(x = shannon, y = unique)) +
-  geom_point(aes(color = person)) +
-  geom_smooth(method = 'lm') +
-  stat_cor(label.y.npc = 'bottom', method = 'spearman') +
-  scale_y_log10() +
-  facet_wrap(~Class) +
-  labs(x = 'Shannon', y = '# unique ARGs', color = 'Individual')
-ggsave('out/ARGs/correlation_diversityARG_shannon.svg', dpi=600)
+# What if Class is fixed effect ? 
+class_lme <- lmerTest::lmer(data = amr_alpha, formula = unique ~ shannon * Class + (1 | person))
+summary(class_lme)
 
-ggplot(cor_data, aes(x = person, y = Class, fill = cor_shannon_unique)) +
-  geom_tile() +
-  geom_text(aes(label = sprintf("%.3f", cor_shannon_unique))) +
-  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0.1, limits = c(0, 1)) + 
-  labs(fill = "Pearson\n p-value", x = "Individual", y = '', 
-       title = 'Correlation between Shannon diversity and ARG diveristy') 
-ggsave('out/ARGs/correlation_matrix_diversityARG_shannon.png', dpi=600)
 
-# For all ARGs together = inflating statistics! 
-amr_group <- amr_simplyfied %>%
-  filter(TPM > 0) %>% 
-  group_by(Group, person) %>%
-  reframe(TPM = sum(TPM), 
-          unique = n_distinct(ARG))
+# Plot 
+coefs <- summary(class_lme)$coefficients
+labels <- coefs[grep("shannon:Class", rownames(coefs)), "Pr(>|t|)"] %>% 
+  as.data.frame() %>% 
+  rownames_to_column('Class') %>% 
+  mutate(Class = substr(Class, 14, 100)) %>% 
+  rbind(data.frame(Class = 'AMINOGLYCOSIDE', . = 0.4414))
 
-alpha_amr_2 <- select(alpha, name, richness, shannon, evenness, date) %>% 
-  full_join(amr_group, by = join_by('name' == 'Group'))
+ggplot(amr_alpha, aes(x = shannon, y = unique, color = person)) +
+  geom_point(alpha = 0.7, size = 2) +
+  geom_smooth(method = "lm", se = TRUE, color = "black") +
+  geom_text(data = labels, aes(x = 4, y = 2.5, label = paste0('p = ',signif(., 2))), inherit.aes = F) +
+  facet_wrap(~ Class, scales = "free_y") +
+  labs(x = "Shannon's diversity index",
+    y = "ARG diversity [# unique genes]", color = 'Individual')
+ggsave('out/ARGs/lme_corr_simple.svg', dpi=400)
 
-ggplot(alpha_amr_2, aes(x = shannon, y = TPM)) +
-  geom_point(aes(color = person)) +
-  geom_smooth(method = 'lm') +
-  stat_cor(label.y.npc = 'top', method = 'pearson') +
-  facet_wrap(~person, scales = 'free') +
-  labs(x = 'Shannon', y = 'TPM of all ARGs [log10]', color = 'Individual')
-ggsave('out/ARGs/all_ARG_abundance_shannon.png', dpi = 600)
+# testing abundance ARGs + bacterial diveristy! 
+classTPM_lme <- lmerTest::lmer(data = amr_alpha, formula = log10(TPM) ~ shannon * Class + (1 | person))
+summary(classTPM_lme, correlation=TRUE)
 
-ggplot(alpha_amr_2, aes(x = shannon, y = unique)) +
-  geom_point(aes(color = person)) +
-  geom_smooth(method = 'lm') +
-  stat_cor(label.y.npc = 'top', method = 'pearson') +
-  facet_wrap(~person, scales = 'free') +
-  labs(x = 'Shannon', y = '# unique ARGs', color = 'Individual')
-ggsave('out/ARGs/all_ARG_diversity_shannon.png', dpi = 600)
+
+# # Matrix of correlations between Shannon and abundance of ARGs 
+# cor_data <- amr_alpha %>%
+#   group_by(person, Class) %>%
+#   reframe(cor_shannon_tpm = cor.test(shannon, TPM, method = "pearson")$p.value,
+#           cor_shannon_unique = cor.test(shannon, unique, method = "pearson")$p.value)
+# 
+# ggplot(amr_alpha, aes(x = shannon, y = TPM)) +
+#   geom_point(aes(color = person)) +
+#   geom_smooth(method = 'lm') +
+#   stat_cor(label.y.npc = 'top', method = 'spearman') +
+#   facet_wrap(~Class, scales = 'free_y') +
+#   labs(x = 'Shannon', y = 'TPM [log10]', color = 'Individual')
+# ggsave('out/ARGs/correlation_abundanceARG_shannon.svg', dpi = 600)
+# 
+# ggplot(cor_data, aes(x = person, y = Class, fill = cor_shannon_tpm)) +
+#   geom_tile() +
+#   geom_text(aes(label = sprintf("%.3f", cor_shannon_tpm))) +
+#   scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0.1, limits = c(0, 1)) + 
+#   labs(fill = "Pearson\n correlation", x = "Individual", y = '', 
+#        title = 'Correlation between Shannon diversity and abundance of an ARG class') 
+# ggsave('out/ARGs/correlation_matrix_abundanceARG_shannon.png', dpi=600)
+# 
+# # cor.test(filter(amr_alpha, person == 'A')$shannon, filter(amr_alpha, person == 'A')$TPM, method = 'pearson')$p.value
+# 
+# # Matrix shannon and diveristy of ARGs 
+# ggplot(amr_alpha, aes(x = shannon, y = unique)) +
+#   geom_point(aes(color = person)) +
+#   geom_smooth(method = 'lm') +
+#   stat_cor(label.y.npc = 'bottom', method = 'spearman') +
+#   scale_y_log10() +
+#   facet_wrap(~Class) +
+#   labs(x = 'Shannon', y = '# unique ARGs', color = 'Individual')
+# ggsave('out/ARGs/correlation_diversityARG_shannon.svg', dpi=600)
+# 
+# ggplot(cor_data, aes(x = person, y = Class, fill = cor_shannon_unique)) +
+#   geom_tile() +
+#   geom_text(aes(label = sprintf("%.3f", cor_shannon_unique))) +
+#   scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0.1, limits = c(0, 1)) + 
+#   labs(fill = "Pearson\n p-value", x = "Individual", y = '', 
+#        title = 'Correlation between Shannon diversity and ARG diveristy') 
+# ggsave('out/ARGs/correlation_matrix_diversityARG_shannon.png', dpi=600)
+# 
+# # For all ARGs together = inflating statistics! 
+# amr_group <- amr_simplyfied %>%
+#   filter(TPM > 0) %>% 
+#   group_by(Group, person) %>%
+#   reframe(TPM = sum(TPM), 
+#           unique = n_distinct(ARG))
+# 
+# alpha_amr_2 <- select(alpha, name, richness, shannon, evenness, date) %>% 
+#   full_join(amr_group, by = join_by('name' == 'Group'))
+# 
+# ggplot(alpha_amr_2, aes(x = shannon, y = TPM)) +
+#   geom_point(aes(color = person)) +
+#   geom_smooth(method = 'lm') +
+#   stat_cor(label.y.npc = 'top', method = 'pearson') +
+#   facet_wrap(~person, scales = 'free') +
+#   labs(x = 'Shannon', y = 'TPM of all ARGs [log10]', color = 'Individual')
+# ggsave('out/ARGs/all_ARG_abundance_shannon.png', dpi = 600)
+# 
+# ggplot(alpha_amr_2, aes(x = shannon, y = unique)) +
+#   geom_point(aes(color = person)) +
+#   geom_smooth(method = 'lm') +
+#   stat_cor(label.y.npc = 'top', method = 'pearson') +
+#   facet_wrap(~person, scales = 'free') +
+#   labs(x = 'Shannon', y = '# unique ARGs', color = 'Individual')
+# ggsave('out/ARGs/all_ARG_diversity_shannon.png', dpi = 600)
 
 # CTX-M1
 amr %>% filter(ARG == 'blaCTX-M-1') %>% 
@@ -374,13 +372,11 @@ amr %>% filter(ARG == 'blaCTX-M-1') %>%
   reframe(TPM = sum(TPM)) %>% 
   filter(TPM > 0.5) %>% 
   ggplot(aes(x = day, y = TPM, color = person)) +
-  geom_point(size = 2) +
-  geom_line(linewidth=1.2) +
-  facet_wrap(~person) +
+  geom_point(size = 3) +
+  scale_y_log10() +
   theme(legend.position = 'none') +
-  labs(x = 'Day')
+  labs(x = 'Day', y = 'TPM [log10]', title = 'Individual I')
 ggsave('out/ARGs/ctx-m1.png')  
-
 
 unique(filter(amr, ARG == 'blaCTX-M-1', TPM > 0.5)$Tax)
 
@@ -407,39 +403,39 @@ ggsave('out/ARGs/van.png')
 
 ## 
 # Persistence of ARgs within an individual 
-person_day <- amr %>%
-  group_by(person) %>% 
-  reframe(all_timepoints = n_distinct(day))
-
-present <- amr %>% 
-  group_by(person, ARG, day, Class) %>%
-  reframe(PA = ifelse(sum(TPM) > 0, 1, 0)) %>% 
-  group_by(person, ARG, Class) %>%
-  reframe(timepoint_present = sum(PA), 
-          timepoint_missing = sum(PA = 0)) %>% 
-  left_join(person_day, by = 'person') %>%  
-  mutate(prevalence = (timepoint_present/all_timepoints)*100) %>% 
-  filter(prevalence > 0) %>%  
-  group_by(person) %>% 
-  mutate(all_args = n_distinct(ARG)) %>% 
-  ungroup() %>% 
-  group_by(person, Class, prevalence) %>% 
-  reframe(n_args_class = n_distinct(ARG), 
-          percent_args = (n_args_class/all_args) *100) 
-
-present %>% 
-  ggplot(aes(y = n_args_class, x = prevalence, color = person)) +
-  geom_point(size = 2) +
-  geom_line(linewidth = 1.2) +
-  #geom_smooth(se = F) +
-  scale_x_continuous(breaks = seq(0, 100, by = 25)) +
-  scale_y_continuous(breaks = seq(0,8, by = 1)) +
-  labs(y = '', x = '# timepoints an ARG was found', color = 'Individual') +
-  facet_wrap(~Class, scales = 'free')
-ggsave('out/ARGs/AMRf_args_present.png')
-
-
-present %>% filter(n_args_class > 1)
+# person_day <- amr %>%
+#   group_by(person) %>% 
+#   reframe(all_timepoints = n_distinct(day))
+# 
+# present <- amr %>% 
+#   group_by(person, ARG, day, Class) %>%
+#   reframe(PA = ifelse(sum(TPM) > 0, 1, 0)) %>% 
+#   group_by(person, ARG, Class) %>%
+#   reframe(timepoint_present = sum(PA), 
+#           timepoint_missing = sum(PA = 0)) %>% 
+#   left_join(person_day, by = 'person') %>%  
+#   mutate(prevalence = (timepoint_present/all_timepoints)*100) %>% 
+#   filter(prevalence > 0) %>%  
+#   group_by(person) %>% 
+#   mutate(all_args = n_distinct(ARG)) %>% 
+#   ungroup() %>% 
+#   group_by(person, Class, prevalence) %>% 
+#   reframe(n_args_class = n_distinct(ARG), 
+#           percent_args = (n_args_class/all_args) *100) 
+# 
+# present %>% 
+#   filter(!Class %in% c('FOSFOMYCIN', 'LINCOSAMIDE/MACROLIDE', 'LINCOSAMIDE/STREPTOGRAMIN', 
+#                        'MACROLIDE/STREPTOGRAMIN', 'PHENICOL/LINCOSAMIDE/OXAZOLIDINONE/PLEUROMUTILIN/STREPTOGRAMIN', 
+#                        'QUINOLONE', 'SULFONAMIDE', 'PHENICOL'), n_args_class > 1) %>% 
+#   ggplot(aes(y = n_args_class, x = prevalence, color = Class)) +
+#   geom_point(size = 3) +
+#   geom_line(linewidth = 2, alpha = .7) +
+#   labs(y = '', x = '% timepoints an ARG was found', color = 'Individual') +
+#   facet_wrap(~person, scales = 'free')
+# ggsave('out/ARGs/AMRf_args_present.png')
+# 
+# 
+# present %>% filter(n_args_class > 1)
 
 # Heatmap genes x time for each person
 # Only ARGs present in more than 1 timepoint and not always
@@ -453,7 +449,8 @@ amr %>%
   ggplot(aes(x = as.factor(day), y = ARG, fill = as.factor(PA))) +
   geom_tile() +
   scale_fill_manual(values = c('white', 'blue')) +
-  facet_wrap(~person, scales = 'free')
+  facet_wrap(~person, scales = 'free') +
+  theme(axis.text.y = element_text(size = 6))
 ggsave('out/ARGs/more_than_once_but_not_always.png')
 
 
@@ -467,10 +464,11 @@ amr %>%
   ggplot(aes(x = as.factor(day), y = ARG, fill = as.factor(PA))) +
   geom_tile() +
   scale_fill_manual(values = c('white', 'blue')) +
-  facet_wrap(~person, scales = 'free')
+  facet_wrap(~person, scales = 'free') +
+  theme(axis.text.y = element_text(size = 6))
 ggsave('out/ARGs/always_present.png')
 
-# How many ARGs are always present ? 
+# ARGs persisitence
 amr_persistence <- amr %>%  
   group_by(person, ARG, day, Class, TPM) %>%
   reframe(PA = ifelse(sum(TPM) > 0, 1, 0)) %>% 
@@ -487,10 +485,9 @@ amr_persistence %>%
   filter(sum > 11) %>% 
   group_by(person) %>%  
   reframe(len = n_distinct(ARG))
-
-# How many ARGs are only present at 1 timepoint? 
-amr_persistence %>%  
-  filter(sum < 3) %>%  
+# Only once
+amr_persistence %>% 
+  filter(sum < 2) %>% 
   group_by(person) %>%  
   reframe(len = n_distinct(ARG))
 
@@ -503,5 +500,4 @@ table_amrs <- amr %>%
   filter(sum > 10) %>%  
   group_by(Class, ARG) %>% 
   reframe(n = n_distinct(person))
-
 write_csv2(table_amrs, 'out/ARGs/table.csv')
