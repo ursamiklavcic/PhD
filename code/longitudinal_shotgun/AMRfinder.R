@@ -205,11 +205,13 @@ amr_tax$Phylum <- factor(amr_tax$Phylum, levels = c('NA', 'Pseudomonadota', 'Act
 unique_tax <- amr_tax %>%
   group_by(Class, Phylum) %>%  
   reframe(unique = n_distinct(ARG)) %>%  
-  ggplot(aes (x = unique, y = Phylum, fill = Class)) +
+  mutate(phylum = ifelse(is.na(Phylum), "Unclassified", as.character(Phylum))) %>%  
+  mutate(phylum = factor(phylum, levels = c('Unclassified', 'Actinomycetota','Bacteroidota' ,'Pseudomonadota','Bacillota'))) %>% 
+  ggplot(aes (x = unique, y = phylum, fill = Class)) +
   geom_col() +
   #scale_fill_manual(values = c('#d94343', '#0c9910','#3472b7', '#b73485', '#f1f011', 'lightgrey' )) +
-  theme(legend.position = 'bottom') +
-  labs(y = '', x = '# unique ARGs')
+  theme(legend.position = 'bottom', axis.text.y = element_text(face = 'italic')) +
+  labs(y = '', x = 'ARG diversity\n[number of unique genes]')
 unique_tax
 ggsave('out/ARGs/AMRf_taxonomy_class_unique_simple.png')
 
@@ -217,18 +219,20 @@ ggsave('out/ARGs/AMRf_taxonomy_class_unique_simple.png')
 tpm_tax <- amr_tax %>%
   group_by(Class, Phylum) %>%  
   reframe(TPM = sum(TPM)) %>%  
-  ggplot(aes (x = TPM, y = Phylum, fill = Class)) +
+  mutate(phylum = ifelse(is.na(Phylum), "Unclassified", as.character(Phylum))) %>%  
+  mutate(phylum = factor(phylum, levels = c('Unclassified', 'Actinomycetota','Bacteroidota' ,'Pseudomonadota','Bacillota'))) %>% 
+  ggplot(aes (x = TPM, y = phylum, fill = Class)) +
   geom_col() +
   scale_x_log10() +
   #scale_fill_manual(values = c('#d94343', '#0c9910','#3472b7', '#b73485', '#f1f011', 'lightgrey' )) +
   theme(legend.position = 'bottom', axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
-  labs(y = '', x = 'TPM [log10]')
+  labs(y = '', x = 'ARG abundance\n[log10(TPM)]')
 tpm_tax
 ggsave('out/ARGs/AMRf_taxonomy_class_TPM_simple_unique.png')
 
-ggarrange(unique_tax +labs(tag = 'A'), tpm_tax + labs(tag = 'B'), 
-          common.legend = T, legend =  'bottom')
-ggsave('out/ARGs/AMRf_unique_tpm_ARGs_taxonomy.png', dpi = 600)
+ggarrange(unique_tax + labs(tag = 'A'), tpm_tax + labs(tag = 'B'), 
+          common.legend = T, legend =  'bottom', widths = c(1, .8))
+ggsave('out/ARGs/ARGs_taxonomy.svg', dpi = 600)
 
 # Mechanisms through time
 amr %>%
@@ -263,7 +267,7 @@ summary(eventTPM_lme)
 # unique 
 event_lme <- lmer(unique ~ age + height + weight + diet + food_supplements + general_activity +
                     household_members + diet14 + antibiotics14 + prebiotics14 + probiotics14 +
-                    supplements14 + stress + extremevent_type + vaccination14 + bristol, 
+                    supplements14 + stress + extremevent_type + vaccination14 + bristol + (1 | person), 
                   data = tpm_unique_amr)
 summary(event_lme)
 
