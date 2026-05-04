@@ -12,7 +12,10 @@ library(lubridate)
 library(microbiomics)
 
 set.seed(96)
-theme_set(theme_bw(base_size = 14))
+theme_set(theme_bw(base_size = 12) +
+            theme(plot.title   = element_text(size = 12),
+                  axis.title   = element_text(size = 12),
+                  axis.text    = element_text(size = 12)))
 
 col <- c('#3CB371', '#f0a336')
 colm <- '#3CB371'
@@ -325,4 +328,11 @@ aleksander_table %>% group_by(PA) %>%
   reframe(n = n_distinct(genome_id))
 
 length(unique(aleksander_table$genome_id))
+
+
+# Which species has sporulation ability but is not Bacillota?
+
+abund2 %>% filter(Phylum != 'Bacillota', sporulation_ability == 'Spore-former') %>%  
+  select(Domain, Phylum, Class, Order, Family, Genus, Species) %>% 
+  unique()
 
