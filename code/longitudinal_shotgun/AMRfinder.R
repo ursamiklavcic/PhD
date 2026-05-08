@@ -180,6 +180,13 @@ amr_simplyfied %>% filter(TPM > 0) %>%
   labs(y = '# unique genes', x = 'Day', fill = 'Event type')
 ggsave('out/ARGs/unique_ARGs_all.png', dpi=600)
 
+# Did individuals E, H have more or more diverse ARG profiles? 
+amr_simplyfied %>% 
+  filter(TPM > 0) %>% 
+  group_by(person) %>%  
+  reframe(sum_unique = n_distinct(ARG), 
+          sum_abund = sum(TPM))
+
 # What is the taxonomy of different ARG classes 
 amr_tax <- amr_simplyfied %>%
   mutate(Phylum = str_extract(Tax, "p_[^;]+"),
