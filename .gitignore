@@ -10,3 +10,9 @@ data/sporulation_ability/metagenomes/data/
 data/sporulation_ability/metagenomes/index/
 /home/nlzoh.si/ursmik1/projects/thesis/data/genomes-all_metadata.tsv
 .Rproj.user
+data/genomes-all_metadata.tsv
+data/sporulation_ability/genomes/
+data/sporulation_ability/intermediate_sporulation_ability.tsv
+data/sporulation_ability/mpa_accession.tsv
+data/sporulation_ability/mpa_accession_manual.tsv
+data/sporulation_ability/mpa_blast_results.tsv
