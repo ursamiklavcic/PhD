@@ -1,0 +1,41 @@
+Group,group,kit,individual
+H1D,Human,Dneasy,Human 1
+H1F,Human,FastDNA,Human 1
+H1N,Human,NucleoSpin,Human 1
+H1P,Human,PowerFecal,Human 1
+H2D,Human,Dneasy,Human 1
+H2F,Human,FastDNA,Human 1
+H2N,Human,NucleoSpin,Human 1
+H2P,Human,PowerFecal,Human 1
+H3D,Human,Dneasy,Human 1
+H3F,Human,FastDNA,Human 1
+H3N,Human,NucleoSpin,Human 1
+H3P,Human,PowerFecal,Human 1
+H4D,Human,Dneasy,Human 2
+H4F,Human,FastDNA,Human 2
+H4N,Human,NucleoSpin,Human 2
+H4P,Human,PowerFecal,Human 2
+H5D,Human,Dneasy,Human 2
+H5F,Human,FastDNA,Human 2
+H5N,Human,NucleoSpin,Human 2
+H5P,Human,PowerFecal,Human 2
+H6D,Human,Dneasy,Human 2
+H6F,Human,FastDNA,Human 2
+H6N,Human,NucleoSpin,Human 2
+H6P,Human,PowerFecal,Human 2
+H7D,Human,Dneasy,Human 3
+H7F,Human,FastDNA,Human 3
+H7N,Human,NucleoSpin,Human 3
+H7P,Human,PowerFecal,Human 3
+H8D,Human,Dneasy,Human 3
+H8F,Human,FastDNA,Human 3
+H8N,Human,NucleoSpin,Human 3
+H85,Human,PowerFecal,Human 3
+H9D,Human,Dneasy,Human 3
+H9F,Human,FastDNA,Human 3
+H9N,Human,NucleoSpin,Human 3
+H9P,Human,PowerFecal,Human 3
+NCD,negative_control,Dneasy,Negativecontrol
+NCF,negative_control,FastDNA,Negativecontrol
+NCN,negative_control,NucleoSpin,Negativecontrol
+NCP,negative_control,PowerFecal,Negativecontrol
