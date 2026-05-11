@@ -45,8 +45,7 @@ only_etoh_species <- full_join(abund %>% filter(substr(name, 1, 1) == 'M'),
                                abund %>% filter(substr(name, 1, 1) == 'S'), 
                                by = join_by('Domain', 'Phylum', 'Class', 'Order', 'Family', 
                                             'Genus', 'Species','original_sample')) %>%
-  mutate(is_etoh_resistant = ifelse((value.x == 0 | is.na(value.x)) & (value.y > 0 & !is.na(value.y)), 'Only ethanol treated samples', 'Other')) %>% 
-  filter(is_etoh_resistant == 'Only ethanol treated samples') %>%
+  filter(value.x == 0, !is.na(value.y), value.y > 0) %>% 
   pull(unique(Species))
 length(unique(only_etoh_species))
 
@@ -78,6 +77,7 @@ etoh_species_table <- abund %>%
 
 write_tsv(etoh_species_table, '~/projects/thesis/data/longitudinal_shotgun/ethanol_resistant_species.tsv')
   
+length(unique(filter(etoh_species_table, is_ethanol_resistant == "Non ethanol-resistant")$Species)) 
 
   
   

@@ -168,11 +168,11 @@ unique(mpa_rel$Phylum)
 rel <- full_join(mpa_rel, otu_rel, by = c('Phylum', 'is_ethanol_resistant')) %>%
   pivot_longer(names_to = 'sample', values_to = 'rel_abund', cols = 3:4) %>% 
   mutate(phylum = ifelse(rel_abund < 0.1, '< 0.1 %', Phylum)) %>%  
-  filter(!is.na(phylum))
+  filter(!is.na(phylum)) %>% 
+  mutate(phylum = factor(phylum, levels = c('Bacillota', 'Bacteroidota', 'Actinomycetota', 'Pseudomonadota', 
+                                            'Verrucomicrobiota', 'Mycoplasmatota', 'Cyanobacteria', 'unclassified Bacteria', '< 0.1 %'))) 
 
 rel %>%
-  mutate(phylum = factor(phylum, levels = c('Bacillota', 'Bacteroidota', 'Actinomycetota', 'Pseudomonadota', 
-                         'Verrucomicrobiota', 'Mycoplasmatota', 'Cyanobacteria', 'unclassified Bacteria', '< 0.1 %'))) %>% 
   ggplot(aes(y = is_ethanol_resistant, x = rel_abund, fill = phylum)) +
   geom_col() +
   scale_fill_manual(values = col_phylum) +
@@ -180,7 +180,61 @@ rel %>%
   labs(x = 'Relative abundance [%]', y = '')
 ggsave('out/compare_16s_meta/relative_abundance_col.png', dpi=400)
 
-# Relative abudnance of these taxa in each sample
+# relative abundance and genus/family dewtermination of uncertain and only ethanol samples 
+otu_rel2 <- otu_long_all %>% 
+  group_by(Phylum, is_ethanol_resistant, Group) %>%
+  reframe(`16S amplicon data` = sum(rel_abund)/n_distinct(Group)*100) 
+
+mpa_rel2 <- bacteria %>%
+  group_by(name, Phylum, is_ethanol_resistant) %>%
+  reframe(total_abund = sum(value, na.rm = T)) %>% 
+  group_by(Phylum, is_ethanol_resistant, name) %>% 
+  reframe(`Metagenomic data` = sum(total_abund)/n_distinct(name)*100)
+
+
+rel_removed <- full_join(mpa_rel2, otu_rel2, by = join_by('Phylum', 'is_ethanol_resistant', 'name' == 'Group')) %>%
+  pivot_longer(names_to = 'sample', values_to = 'rel_abund', cols = 4:5) %>%  
+  filter(is_ethanol_resistant %in% c('Only ethanol treated samples', 'Uncertain'), 
+         rel_abund > 0)
+
+rel_removed %>% 
+  filter(is_ethanol_resistant  == 'Only ethanol treated samples') %>% 
+  ggplot(aes(x = rel_abund, y = Phylum, fill = Phylum)) +
+  geom_boxplot(show.legend = F) +
+  scale_x_log10() +
+  facet_wrap(~sample, scales = 'free_x') +
+  labs(x = 'Relative abundance [%]', y = '', title = 'Taxa detected only in ethanol treated samples') +
+  theme(axis.text.y = element_text(face = 'italic'))
+ggsave('out/compare_16s_meta/relative_abundance_ethanol_samples_only.svg')
+
+rel_removed %>% 
+  filter(is_ethanol_resistant  == 'Uncertain') %>% 
+  ggplot(aes(x = rel_abund, y = Phylum, fill = Phylum)) +
+  geom_boxplot(show.legend = F) +
+  scale_x_log10() +
+  facet_wrap(~sample, scales = 'free_x') +
+  labs(x = 'Relative abundance [%]', y = '', title = 'Undetermined taxa') +
+  theme(axis.text.y = element_text(face = 'italic'))
+ggsave('out/compare_16s_meta/relative_abundance_uncertain.svg')
+
+uncertain_rel <- rel_removed %>% 
+  filter(is_ethanol_resistant  == 'Uncertain') %>% 
+  group_by(Phylum, sample) %>% 
+  reframe(m = mean(rel_abund))
+
+otu_long_all %>% filter(is_ethanol_resistant  == 'Uncertain') %>% 
+  group_by(Phylum) %>%
+  reframe(n = n_distinct(name))
+
+bacteria %>% filter(is_ethanol_resistant  == 'Uncertain') %>% 
+  group_by(Phylum) %>%
+  reframe(n = n_distinct(Species))
+
+bacteria %>% filter(is_ethanol_resistant  == 'Only ethanol treated samples') %>% 
+  group_by(Phylum) %>%
+  reframe(n = n_distinct(Species))
+
+# Relative abudnance of  taxa in each sample
 p_pyhlum <- otu_long_all %>%  
   filter(is_ethanol_resistant == c('Ethanol-resistant', 'Non ethanol-resistant')) %>% 
   filter(!Phylum %in% c('TM7', 'Deferribacteres', 'Lentisphaerota', 'Verrucomicrobiota')) %>% 
@@ -238,6 +292,33 @@ p1 <-ggarrange(rel_otu_plot + labs(title = '16S amplicon data'),
 p1
 ggsave('out/compare_16s_meta/rel_both_etoh_non.svg', dpi = 400)
 
+# Which genera were the most pervasaive in untretaed samples and ethanol tretaed samples? 
+otu_rel3 <- otu_long_all %>% 
+  group_by(Phylum, Genus, is_ethanol_resistant) %>%
+  reframe(`16S amplicon data` = sum(rel_abund)/n_distinct(Group)*100) 
+
+mpa_rel3 <- bacteria %>%
+  group_by(name, Phylum, Genus, is_ethanol_resistant) %>%
+  reframe(total_abund = sum(value, na.rm = T)) %>% 
+  group_by(Phylum, Genus, is_ethanol_resistant) %>% 
+  reframe(`Metagenomic data` = sum(total_abund)/n_distinct(name)*100)
+
+rel_genus <- full_join(mpa_rel3, otu_rel3, by = join_by('Phylum','Genus', 'is_ethanol_resistant')) %>%
+  #pivot_longer(names_to = 'sample', values_to = 'rel_abund', cols = 4:5) %>% 
+  # mutate(phylum = ifelse(rel_abund < 0.01, '< 0.01 %', Phylum)) %>%  
+  # filter(!is.na(phylum), rel_abund > 0) %>% 
+  # mutate(phylum = factor(phylum, levels = c('Bacillota', 'Bacteroidota', 'Actinomycetota', 'Pseudomonadota', 
+  #                                           'Verrucomicrobiota', 'Mycoplasmatota', 'Cyanobacteria', 'unclassified Bacteria', '< 0.01 %'))) %>% 
+  filter(is_ethanol_resistant == 'Non ethanol-resistant') 
+
+rel_genus %>% 
+  filter(!str_detect(Genus, "^GGB")) %>% 
+  
+  ggplot(aes(y = Genus, x = rel_abund, fill = Phylum)) +
+  geom_boxplot() +
+  scale_x_log10() +
+  facet_wrap(~sample, scales = 'free')
+
 # For spore-forming and ethanol-resistant together! 
 long_mpa <- readRDS('~/projects/longitudinal_amplicons/data/r_data/long_mpa.RDS')
 
@@ -291,7 +372,6 @@ ggarrange(rel_otu_plot2 + labs(title = '16S amplicon data'),
 ggsave('out/compare_16s_meta/supplement_rel_both_simple.svg', dpi = 400)
 
 # Alpha diveristy 
-
 alpha_mpa <- readRDS('data/longitudinal_shotgun/alpha_diveristy.RDS') %>% select(name, richness, shannon, evenness)
 alpha_otu <- readRDS('data/longitudinal_amplicons/alpha.RDS')
 
@@ -645,3 +725,12 @@ ggplot(rel_both, aes(x = data, y = rel, fill = Phylum)) +
   labs(x = "", y = "Relative abundance [%]", fill = "Phylum") +
   theme(legend.text = element_text(face = 'italic'))
 ggsave('out/compare_16s_meta/rel_abund.svg')
+
+
+
+# Species not Bacillota in ethanol resistant community: 
+species <- bacteria %>%  
+  filter(is_ethanol_resistant == 'Only ethanol treated samples') %>% 
+  filter(!str_detect(Species, "^SGB^")) %>%  
+  group_by(Phylum, Genus, Species) %>% 
+  reframe(m = mean(value))
