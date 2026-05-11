@@ -2,11 +2,11 @@ thesis.Rproj
 out/
 code/sporulation_ability/slurm-11733.out
 code/sporulation_ability/map.out
-/home/nlzoh.si/ursmik1/projects/thesis/data/kit_comparison/mothur/
-/home/nlzoh.si/ursmik1/projects/thesis/data/etoh_h_comparison/mothur/
-/home/nlzoh.si/ursmik1/projects/thesis/data/PStrain/
-/home/nlzoh.si/ursmik1/projects/thesis/data/sporulation_ability/SGB
-/home/nlzoh.si/ursmik1/projects/thesis/data/sporulation_ability/metagenomes/data/
-/home/nlzoh.si/ursmik1/projects/thesis/data/sporulation_ability/metagenomes/index/
+data/kit_comparison/mothur/
+data/etoh_h_comparison/mothur/
+data/PStrain/
+data/sporulation_ability/SGB
+data/sporulation_ability/metagenomes/data/
+data/sporulation_ability/metagenomes/index/
 
 .Rproj.user
