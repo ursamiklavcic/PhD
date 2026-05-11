@@ -119,14 +119,14 @@ for FILE in $FASTQ_DIR/*1.fq; do
     wait -n
   done
   SAMPLE=$(basename $FILE .1.fq)
-  srun --ntasks=1 htseq-count -f bam -r pos -t CDS -i gene_id "$data_dir/${SAMPLE}.filtered.bam" "$GTF" > "$data_dir/${SAMPLE}.count"  &
+  srun --ntasks=1 htseq-count -f bam -r pos -t CDS -i gene_id "$data_dir/${SAMPLE}.sorted.bam" "$GTF" > "$data_dir/${SAMPLE}.count"  &
 done
 wait
 
 
 # Combine counts
 files=("$data_dir"/*.count)
-combined_counts="${output}/combined_counts.txt"
+combined_counts="${data_dir}/combined_counts.txt"
 first_file="${files[0]}"
 
 cut -f1,2 "$first_file" > "$combined_counts"
