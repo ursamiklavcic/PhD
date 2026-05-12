@@ -234,6 +234,26 @@ bacteria %>% filter(is_ethanol_resistant  == 'Only ethanol treated samples') %>%
   group_by(Phylum) %>%
   reframe(n = n_distinct(Species))
 
+# top 10 most abudnant genera 
+genus_otu <- otu_long_all %>% filter(str_sub(Group, 1, 1) == "M") %>%  
+  group_by(Genus, Group) %>% 
+  reframe(rel = sum(rel_abund)) %>% 
+  group_by(Genus) %>% 
+  reframe(mean = mean(rel))
+
+genus_mpa <- bacteria %>% filter(str_sub(name, 1, 1) == "M") %>% 
+  group_by(Genus, name) %>% 
+  reframe(rel = sum(value)) %>% 
+  group_by(Genus) %>% 
+  reframe(mean = mean(rel))
+
+bacteria %>% filter(str_sub(name, 1, 1) == "M") %>% 
+  filter(is_ethanol_resistant == 'Ethanol-resistant', Phylum == 'Pseudomonadota', value > 0) %>% 
+  select(Species) %>% 
+  distinct()
+
+
+
 # Relative abudnance of  taxa in each sample
 p_pyhlum <- otu_long_all %>%  
   filter(is_ethanol_resistant == c('Ethanol-resistant', 'Non ethanol-resistant')) %>% 
