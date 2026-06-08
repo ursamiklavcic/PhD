@@ -605,3 +605,40 @@ ema_bray %>%
   #scale_color_manual(values = c('darkred', 'skyblue', 'gold3')) +
   labs(x = '', y='', color = 'Time of light \n incubation with EMA', shape = '')
 ggsave('out/etoh_h_comparison/bray_ema.png', dpi=600)
+
+# Additional analysis - how reproducible was ethanol and EMA treatment vs EMA heat and microbiota 
+# (all 4 technical replications)
+shared_genera <- otu_ema %>% filter(treatmentEMA %in% c('Non-treated', '10 min'), rel_abund > 0) %>%
+  distinct(Genus, shock) %>%
+  count(Genus) %>%
+  filter(n > 1) %>%
+  pull(Genus)
+
+sd_rel <- otu_ema %>% filter(treatmentEMA %in% c('Non-treated', '10 min')) %>% 
+  group_by(shock, treatmentEMA, Genus, Group) %>% 
+  reframe(rel_abund = mean(rel_abund)) %>%  
+  filter(rel_abund > 0) %>% 
+  group_by(shock, treatmentEMA, Genus) %>% 
+  reframe(mean_rel = mean(rel_abund), 
+          sd_rel = sd(rel_abund))
+
+sd_rel %>% 
+  filter(!is.na(sd_rel)) %>% 
+  filter(Genus %in% shared_genera) %>% 
+  ggplot(aes(y = Genus, x = shock, fill = sd_rel)) +
+  geom_tile() +
+  geom_text(aes(label = sprintf("%.5f", sd_rel))) +
+  scale_fill_gradientn(colours = c("white", "#0C4FA6", "#123E80")) +
+  labs(x = '', y = 'Genus', fill = 'Standrad deviation of\nrelative abundance')
+ggsave('out/etoh_h_comparison/sd_relabund.png')  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
