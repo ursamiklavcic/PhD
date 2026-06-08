@@ -99,7 +99,6 @@ plot_persist_mpa2 <- persistence_mpa %>%
   theme(legend.position = 'bottom') 
 plot_persist_mpa2
 
-
 plot_persist_otu2 <- ggplot(persistence_otu, aes(x = prevalence, y = per_otus, color = is_ethanol_resistant)) +
   geom_point(size = 4, alpha = .8) +
   geom_smooth(method = "loess", formula = y ~ x, se = F, linewidth = 1, alpha = .4) +
